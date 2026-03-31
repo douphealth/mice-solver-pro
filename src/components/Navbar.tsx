@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Bug, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -19,7 +19,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
         <Link to="/" className="flex items-center gap-2 font-display font-bold text-xl text-foreground">
-          <Bug className="h-6 w-6 text-primary" />
+          <img src="/logo.png" alt="MiceGoneGuide logo" className="h-8 w-8 object-contain" />
           <span>MiceGone<span className="text-accent">Guide</span></span>
         </Link>
 
