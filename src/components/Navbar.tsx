@@ -1,12 +1,24 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "./ui/button";
-import { Menu, X } from "lucide-react";
-import { useState } from "react";
+import { Menu, X, User } from "lucide-react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const location = useLocation();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setUser(session?.user ?? null);
+    });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const links = [
     { to: "/", label: "Home" },
@@ -36,6 +48,17 @@ export default function Navbar() {
               {l.label}
             </Link>
           ))}
+          {user ? (
+            <Link to="/dashboard">
+              <Button variant="outline" size="sm">
+                <User className="h-4 w-4 mr-1" /> Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Link to="/auth">
+              <Button variant="ghost" size="sm">Sign In</Button>
+            </Link>
+          )}
           <Link to="/quiz">
             <Button variant="hero" size="sm">Start Free Quiz →</Button>
           </Link>
@@ -68,6 +91,15 @@ export default function Navbar() {
                   {l.label}
                 </Link>
               ))}
+              {user ? (
+                <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
+                  <Button variant="outline" className="w-full">Dashboard</Button>
+                </Link>
+              ) : (
+                <Link to="/auth" onClick={() => setMobileOpen(false)}>
+                  <Button variant="ghost" className="w-full">Sign In</Button>
+                </Link>
+              )}
               <Link to="/quiz" onClick={() => setMobileOpen(false)}>
                 <Button variant="hero" className="w-full mt-2">Start Free Quiz →</Button>
               </Link>
