@@ -615,7 +615,7 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
     py = checkPage(doc, py, 20);
     py = sectionHeader(doc, py, "PERSONALIZED SHOPPING LIST", "P2");
     for (const item of report.shoppingList) {
-      py = checkPage(doc, py, 12);
+      py = checkPage(doc, py, 16);
       doc.setFillColor(...C.green);
       doc.circle(MARGIN_L + 5, py + 1, 2, "F");
       doc.setTextColor(255, 255, 255);
@@ -631,7 +631,14 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...C.muted);
       doc.text(sanitize(item.reason), MARGIN_L + 12, py + 6);
-      py += 11;
+
+      // Add clickable "Buy on Amazon" link
+      if (item.affiliateUrl) {
+        addLink(doc, "View on Amazon >>", item.affiliateUrl, MARGIN_L + 12, py + 11, 7);
+        py += 16;
+      } else {
+        py += 11;
+      }
     }
 
     // Timeline
