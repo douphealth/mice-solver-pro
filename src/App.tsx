@@ -10,6 +10,7 @@ import CalculatorPage from "./pages/CalculatorPage.tsx";
 import EntryPointsPage from "./pages/EntryPointsPage.tsx";
 import AuthPage from "./pages/AuthPage.tsx";
 import DashboardPage from "./pages/DashboardPage.tsx";
+import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
