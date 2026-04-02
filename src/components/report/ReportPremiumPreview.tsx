@@ -19,6 +19,7 @@ export default function ReportPremiumPreview({ report }: Props) {
 
   const handleCheckout = async () => {
     setLoading(true);
+    trackEvent("premium_checkout_clicked");
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: { quizResultId: "" },

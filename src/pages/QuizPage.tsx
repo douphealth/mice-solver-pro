@@ -65,6 +65,7 @@ export default function QuizPage() {
     } else {
       const finalAnswers = { ...answers };
       if (current.type === "zip") finalAnswers.zip = zipValue;
+      trackEvent("quiz_completed", { steps: activeSteps.length });
       navigate("/report", { state: { answers: finalAnswers } });
     }
   };
