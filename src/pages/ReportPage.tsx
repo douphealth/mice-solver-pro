@@ -66,6 +66,7 @@ export default function ReportPage() {
   }
 
   const handleDownloadPDF = () => {
+    trackEvent("pdf_downloaded", { severity: report.severity, species: report.species.name });
     const doc = generatePDF(report, false);
     doc.save("MiceGoneGuide-Report.pdf");
   };
