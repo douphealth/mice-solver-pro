@@ -1,34 +1,39 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { quizSteps, QuizAnswers } from "@/lib/quiz-data";
-import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
 export default function QuizPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<QuizAnswers>({});
   const [zipValue, setZipValue] = useState("");
-  const current = quizSteps[step];
-  const progress = ((step + 1) / quizSteps.length) * 100;
+
+  // Filter steps based on branching logic
+  const activeSteps = useMemo(() => {
+    return quizSteps.filter((s) => !s.showIf || s.showIf(answers));
+  }, [answers]);
+
+  const [stepIndex, setStepIndex] = useState(0);
+  const current = activeSteps[Math.min(stepIndex, activeSteps.length - 1)];
+  const progress = ((stepIndex + 1) / activeSteps.length) * 100;
 
   const handleSelect = (optionId: string) => {
     if (current.type === "single") {
       setAnswers((prev) => ({ ...prev, [current.id]: optionId }));
-      // Auto-advance after brief delay
       setTimeout(() => {
-        if (step < quizSteps.length - 1) setStep(step + 1);
+        if (stepIndex < activeSteps.length - 1) setStepIndex(stepIndex + 1);
       }, 300);
     } else if (current.type === "multi") {
       setAnswers((prev) => {
         const existing = (prev[current.id] as string[]) || [];
-        if (optionId === "nothing" || optionId === "none") {
+        if (optionId === "nothing" || optionId === "none" || optionId === "none_attractants") {
           return { ...prev, [current.id]: [optionId] };
         }
-        const filtered = existing.filter((id) => id !== "nothing" && id !== "none");
+        const filtered = existing.filter((id) => id !== "nothing" && id !== "none" && id !== "none_attractants");
         if (filtered.includes(optionId)) {
           return { ...prev, [current.id]: filtered.filter((id) => id !== optionId) };
         }
@@ -55,15 +60,20 @@ export default function QuizPage() {
     if (current.type === "zip") {
       setAnswers((prev) => ({ ...prev, zip: zipValue }));
     }
-    if (step < quizSteps.length - 1) {
-      setStep(step + 1);
+    if (stepIndex < activeSteps.length - 1) {
+      setStepIndex(stepIndex + 1);
     } else {
-      // Submit
       const finalAnswers = { ...answers };
       if (current.type === "zip") finalAnswers.zip = zipValue;
       navigate("/report", { state: { answers: finalAnswers } });
     }
   };
+
+  const handleBack = () => {
+    if (stepIndex > 0) setStepIndex(stepIndex - 1);
+  };
+
+  const estimatedTimeLeft = Math.max(1, Math.ceil((activeSteps.length - stepIndex) * 0.25));
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -71,7 +81,7 @@ export default function QuizPage() {
 
       <div className="flex-1 flex flex-col">
         {/* Progress bar */}
-        <div className="w-full bg-muted h-1.5">
+        <div className="w-full bg-muted h-2">
           <motion.div
             className="h-full bg-accent-gradient rounded-r-full"
             initial={{ width: 0 }}
@@ -82,8 +92,14 @@ export default function QuizPage() {
 
         <div className="flex-1 container mx-auto px-4 py-8 md:py-16 max-w-2xl">
           {/* Step counter */}
-          <div className="text-sm text-muted-foreground mb-2">
-            Step {step + 1} of {quizSteps.length} · {current.category}
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm text-muted-foreground">
+              Step {stepIndex + 1} of {activeSteps.length} · {current.category}
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              ~{estimatedTimeLeft} min left
+            </div>
           </div>
 
           <AnimatePresence mode="wait">
@@ -103,7 +119,9 @@ export default function QuizPage() {
 
               {/* Options */}
               {current.type !== "zip" && current.options && (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className={`grid gap-3 ${
+                  current.options.length <= 4 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"
+                }`}>
                   {current.options.map((opt) => {
                     const selected = isSelected(opt.id);
                     return (
@@ -143,6 +161,9 @@ export default function QuizPage() {
                     onChange={(e) => setZipValue(e.target.value.replace(/\D/g, ""))}
                     className="text-2xl text-center h-16 font-mono tracking-widest"
                   />
+                  <p className="text-xs text-muted-foreground mt-2 text-center">
+                    Optional but helps with seasonal and regional insights
+                  </p>
                 </div>
               )}
             </motion.div>
@@ -152,8 +173,8 @@ export default function QuizPage() {
           <div className="flex justify-between mt-10">
             <Button
               variant="ghost"
-              onClick={() => setStep(Math.max(0, step - 1))}
-              disabled={step === 0}
+              onClick={handleBack}
+              disabled={stepIndex === 0}
             >
               <ArrowLeft className="h-4 w-4 mr-1" /> Back
             </Button>
@@ -162,9 +183,9 @@ export default function QuizPage() {
               <Button
                 variant="hero"
                 onClick={handleNext}
-                disabled={!canProceed()}
+                disabled={current.type === "zip" ? false : !canProceed()}
               >
-                {step === quizSteps.length - 1 ? "Get My Free Report" : "Next"}
+                {stepIndex === activeSteps.length - 1 ? "Get My Free Report" : "Next"}
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Button>
             )}
