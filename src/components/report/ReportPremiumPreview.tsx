@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import {
   ClipboardList, ShoppingCart, Calendar, CheckCircle2,
-  Sparkles, Lock
+  Sparkles, Lock, Shield, Star, ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ReportData } from "@/lib/report-generator";
@@ -59,38 +59,63 @@ export default function ReportPremiumPreview({ report }: Props) {
       </div>
 
       {/* Overlay CTA */}
-      <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm">
-        <div className="text-center px-6 max-w-md">
-          <div className="inline-flex items-center gap-2 bg-accent/20 rounded-full px-4 py-1.5 text-sm text-accent mb-4">
-            <Sparkles className="h-4 w-4" />
-            Pro Report
+      <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+        <div className="text-center px-6 max-w-lg">
+          {/* Trust badges */}
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <span className="trust-badge">
+              <Shield className="h-3 w-3 text-primary" />
+              Expert-Grade
+            </span>
+            <span className="trust-badge">
+              <Star className="h-3 w-3 text-accent" />
+              4.9/5 Rating
+            </span>
           </div>
-          <h3 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3">
-            Unlock Your Complete Elimination Masterplan
+
+          <div className="inline-flex items-center gap-2 bg-accent/15 rounded-full px-5 py-2 text-sm font-semibold text-accent mb-5">
+            <Sparkles className="h-4 w-4" />
+            Pro Elimination Masterplan
+          </div>
+
+          <h3 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3 leading-tight">
+            Unlock Your Complete<br />
+            <span className="text-gradient-premium">Mouse Elimination Plan</span>
           </h3>
-          <p className="text-muted-foreground mb-6 text-sm leading-relaxed">
-            Get the step-by-step plan to eliminate mice — customized to YOUR exact situation.
+
+          <p className="text-muted-foreground mb-6 text-sm leading-relaxed max-w-sm mx-auto">
+            Get the step-by-step protocol to eliminate mice permanently — customized to YOUR exact situation, home, and budget.
           </p>
-          <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto text-left mb-6">
+
+          <div className="grid grid-cols-2 gap-2.5 max-w-sm mx-auto text-left mb-7">
             {[
               "Room-by-room strategy",
               "Exact product shopping list",
               "Day-by-day protocol",
               "Prevention calendar",
-              "Decontamination guide",
-              "Downloadable PDF",
+              "CDC decontamination guide",
+              "Downloadable Pro PDF",
             ].map((item) => (
-              <div key={item} className="flex items-center gap-1.5 text-xs text-foreground">
-                <CheckCircle2 className="h-3 w-3 text-accent shrink-0" />
+              <div key={item} className="flex items-center gap-2 text-xs text-foreground">
+                <CheckCircle2 className="h-3.5 w-3.5 text-accent shrink-0" />
                 {item}
               </div>
             ))}
           </div>
-          <Button variant="premium" size="xl">
+
+          <Button variant="premium" size="xl" className="shadow-xl">
             <Lock className="h-5 w-5 mr-1" />
             Unlock Full Plan — $9.99
+            <ArrowRight className="h-4 w-4 ml-1" />
           </Button>
-          <p className="text-muted-foreground text-xs mt-3">One-time payment · Instant access · 100% personalized</p>
+
+          <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">
+            <span>One-time payment</span>
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+            <span>Instant access</span>
+            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+            <span>100% personalized</span>
+          </div>
         </div>
       </div>
     </motion.section>
