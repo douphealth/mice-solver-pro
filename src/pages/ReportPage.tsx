@@ -56,6 +56,7 @@ export default function ReportPage() {
     localStorage.setItem("mgq_email_captured", "true");
     setShowEmailGate(false);
     setEmailCaptured(true);
+    trackEvent("email_captured");
   };
 
   if (!answers || !report) return null;
