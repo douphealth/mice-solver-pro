@@ -142,18 +142,18 @@ export function generateReport(answers: QuizAnswers): ReportData {
   // Health risks
   const healthRisks: string[] = [];
   if (species.name === "Deer Mouse") {
-    healthRisks.push("⚠️ HIGH RISK: Hantavirus — Deer mice are the primary carrier. Avoid sweeping droppings (aerosolizes virus). Use wet cleanup methods only.");
+    healthRisks.push("HIGH RISK: Hantavirus -- Deer mice are the primary carrier. Avoid sweeping droppings (aerosolizes virus). Use wet cleanup methods only.");
   }
   healthRisks.push("Salmonella & E. coli contamination of food surfaces and utensils");
   healthRisks.push("Leptospirosis risk from urine on surfaces");
   if (evidence.includes("droppings") && locations.includes("kitchen")) {
-    healthRisks.push("🔴 CRITICAL: Kitchen contamination detected — sanitize all food preparation surfaces immediately");
+    healthRisks.push("CRITICAL: Kitchen contamination detected -- sanitize all food preparation surfaces immediately");
   }
   if (household.includes("kids")) {
     healthRisks.push("Children are especially vulnerable to rodent-borne diseases due to floor play and hand-to-mouth behavior");
   }
   if (household.includes("pregnant")) {
-    healthRisks.push("⚠️ Pregnant individuals should avoid direct contact with mouse droppings — risk of Lymphocytic choriomeningitis (LCMV)");
+    healthRisks.push("Pregnant individuals should avoid direct contact with mouse droppings -- risk of Lymphocytic choriomeningitis (LCMV)");
   }
   if (household.includes("allergies")) {
     healthRisks.push("Mouse dander and droppings are potent allergens and can trigger asthma attacks");
