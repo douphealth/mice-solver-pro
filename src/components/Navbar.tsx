@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -20,6 +21,12 @@ export default function Navbar() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 10);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const links = [
     { to: "/", label: "Home" },
     { to: "/quiz", label: "Free Diagnosis" },
@@ -28,7 +35,11 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-lg border-b border-border">
+    <nav className={`sticky top-0 z-50 transition-all duration-300 ${
+      scrolled
+        ? "bg-background/95 backdrop-blur-xl border-b border-border shadow-sm"
+        : "bg-background/80 backdrop-blur-lg border-b border-border/50"
+    }`}>
       <div className="container mx-auto flex items-center justify-between h-16 px-4">
         <Link to="/" className="flex items-center gap-2 font-display font-bold text-xl text-foreground">
           <img src="/logo.png" alt="MiceGoneGuide logo" className="h-8 w-8 object-contain" />

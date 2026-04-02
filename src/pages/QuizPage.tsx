@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { quizSteps, QuizAnswers } from "@/lib/quiz-data";
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Shield } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
 export default function QuizPage() {
@@ -12,7 +12,6 @@ export default function QuizPage() {
   const [answers, setAnswers] = useState<QuizAnswers>({});
   const [zipValue, setZipValue] = useState("");
 
-  // Filter steps based on branching logic
   const activeSteps = useMemo(() => {
     return quizSteps.filter((s) => !s.showIf || s.showIf(answers));
   }, [answers]);
@@ -81,7 +80,7 @@ export default function QuizPage() {
 
       <div className="flex-1 flex flex-col">
         {/* Progress bar */}
-        <div className="w-full bg-muted h-2">
+        <div className="w-full bg-muted h-1.5 relative">
           <motion.div
             className="h-full bg-accent-gradient rounded-r-full"
             initial={{ width: 0 }}
@@ -92,11 +91,16 @@ export default function QuizPage() {
 
         <div className="flex-1 container mx-auto px-4 py-8 md:py-16 max-w-2xl">
           {/* Step counter */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-sm text-muted-foreground">
-              Step {stepIndex + 1} of {activeSteps.length} · {current.category}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="section-badge bg-primary/10 text-primary">
+                {current.category}
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {stepIndex + 1} of {activeSteps.length}
+              </span>
             </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
               ~{estimatedTimeLeft} min left
             </div>
@@ -110,11 +114,11 @@ export default function QuizPage() {
               exit={{ opacity: 0, x: -30 }}
               transition={{ duration: 0.3 }}
             >
-              <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-2">
+              <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-2 leading-tight">
                 {current.question}
               </h2>
               {current.subtitle && (
-                <p className="text-muted-foreground mb-8">{current.subtitle}</p>
+                <p className="text-muted-foreground mb-8 text-sm">{current.subtitle}</p>
               )}
 
               {/* Options */}
@@ -129,19 +133,25 @@ export default function QuizPage() {
                         key={opt.id}
                         onClick={() => handleSelect(opt.id)}
                         whileTap={{ scale: 0.97 }}
-                        className={`relative flex flex-col items-center text-center p-4 rounded-xl border-2 transition-all ${
+                        className={`relative flex flex-col items-center text-center p-4 rounded-xl border-2 transition-all duration-200 ${
                           selected
-                            ? "border-primary bg-primary/5 shadow-md"
-                            : "border-border bg-card hover:border-primary/40 hover:shadow-sm"
+                            ? "border-primary bg-primary/5 shadow-md ring-1 ring-primary/20"
+                            : "border-border bg-card hover:border-primary/30 hover:shadow-sm"
                         }`}
                       >
                         {selected && (
-                          <CheckCircle2 className="absolute top-2 right-2 h-4 w-4 text-primary" />
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            className="absolute top-2 right-2"
+                          >
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                          </motion.div>
                         )}
                         <span className="text-2xl mb-2">{opt.icon}</span>
                         <span className="text-sm font-medium text-foreground">{opt.label}</span>
                         {opt.description && (
-                          <span className="text-xs text-muted-foreground mt-1">{opt.description}</span>
+                          <span className="text-xs text-muted-foreground mt-1 leading-relaxed">{opt.description}</span>
                         )}
                       </motion.button>
                     );
@@ -159,10 +169,11 @@ export default function QuizPage() {
                     maxLength={5}
                     value={zipValue}
                     onChange={(e) => setZipValue(e.target.value.replace(/\D/g, ""))}
-                    className="text-2xl text-center h-16 font-mono tracking-widest"
+                    className="text-2xl text-center h-16 font-mono tracking-widest border-2"
                   />
-                  <p className="text-xs text-muted-foreground mt-2 text-center">
-                    Optional but helps with seasonal and regional insights
+                  <p className="text-xs text-muted-foreground mt-3 text-center flex items-center justify-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    Optional — helps with seasonal and regional insights
                   </p>
                 </div>
               )}
@@ -175,8 +186,9 @@ export default function QuizPage() {
               variant="ghost"
               onClick={handleBack}
               disabled={stepIndex === 0}
+              className="gap-1"
             >
-              <ArrowLeft className="h-4 w-4 mr-1" /> Back
+              <ArrowLeft className="h-4 w-4" /> Back
             </Button>
 
             {(current.type === "multi" || current.type === "zip") && (
@@ -184,9 +196,10 @@ export default function QuizPage() {
                 variant="hero"
                 onClick={handleNext}
                 disabled={current.type === "zip" ? false : !canProceed()}
+                className="gap-1"
               >
                 {stepIndex === activeSteps.length - 1 ? "Get My Free Report" : "Next"}
-                <ArrowRight className="h-4 w-4 ml-1" />
+                <ArrowRight className="h-4 w-4" />
               </Button>
             )}
           </div>
