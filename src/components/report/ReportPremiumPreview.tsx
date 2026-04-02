@@ -128,10 +128,10 @@ export default function ReportPremiumPreview({ report }: Props) {
             ))}
           </div>
 
-          <Button variant="premium" size="xl" className="shadow-xl">
-            <Lock className="h-5 w-5 mr-1" />
-            Unlock Full Plan — $9.99
-            <ArrowRight className="h-4 w-4 ml-1" />
+          <Button variant="premium" size="xl" className="shadow-xl" onClick={handleCheckout} disabled={loading}>
+            {loading ? <Loader2 className="h-5 w-5 mr-1 animate-spin" /> : <Lock className="h-5 w-5 mr-1" />}
+            {loading ? "Redirecting..." : "Unlock Full Plan — $9.99"}
+            {!loading && <ArrowRight className="h-4 w-4 ml-1" />}
           </Button>
 
           <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">

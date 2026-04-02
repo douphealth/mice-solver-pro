@@ -29,6 +29,7 @@ const App = () => (
           <Route path="/tools/entry-points" element={<EntryPointsPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/payment-success" element={<PaymentSuccessPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
