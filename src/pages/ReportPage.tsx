@@ -7,7 +7,11 @@ import SeverityGauge from "@/components/SeverityGauge";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Shield, AlertTriangle, MapPin, Zap, TrendingUp, Bug, CheckCircle2, Lock } from "lucide-react";
+import {
+  Shield, AlertTriangle, MapPin, Zap, TrendingUp, Bug,
+  CheckCircle2, Lock, ShoppingCart, Calendar, ClipboardList,
+  Sparkles, FileText
+} from "lucide-react";
 
 const mouseFacts = [
   "Mice can squeeze through a gap the width of a pencil (¼ inch).",
@@ -95,29 +99,17 @@ export default function ReportPage() {
 
         <div className="space-y-6">
           {/* Severity */}
-          <motion.section
-            className={sectionClass}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
+          <motion.section className={sectionClass} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
             <h2 className={sectionTitle}>
               <TrendingUp className="h-6 w-6 text-primary" />
               Infestation Severity
             </h2>
             <SeverityGauge score={report.severity} label={report.severityLabel} />
-            <p className="text-muted-foreground mt-4 leading-relaxed text-center">
-              {report.severityDescription}
-            </p>
+            <p className="text-muted-foreground mt-4 leading-relaxed text-center">{report.severityDescription}</p>
           </motion.section>
 
           {/* Species */}
-          <motion.section
-            className={sectionClass}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
+          <motion.section className={sectionClass} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <h2 className={sectionTitle}>
               <Bug className="h-6 w-6 text-primary" />
               Rodent Identification
@@ -148,12 +140,7 @@ export default function ReportPage() {
           </motion.section>
 
           {/* Health Risks */}
-          <motion.section
-            className={sectionClass}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          <motion.section className={sectionClass} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <h2 className={sectionTitle}>
               <Shield className="h-6 w-6 text-primary" />
               Health Risk Assessment
@@ -172,12 +159,7 @@ export default function ReportPage() {
           </motion.section>
 
           {/* Entry Points */}
-          <motion.section
-            className={sectionClass}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+          <motion.section className={sectionClass} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <h2 className={sectionTitle}>
               <MapPin className="h-6 w-6 text-primary" />
               Probable Entry Points
@@ -215,42 +197,90 @@ export default function ReportPage() {
             </div>
           </motion.section>
 
-          {/* Premium Upsell */}
+          {/* Premium Content - Blurred Preview */}
           <motion.section
-            className="bg-hero rounded-2xl p-8 text-center"
+            className="relative rounded-2xl overflow-hidden"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 bg-accent/20 rounded-full px-4 py-1.5 text-sm text-accent mb-4">
-              💎 Upgrade Available
+            {/* Blurred background content */}
+            <div className="glass-card rounded-2xl p-6 md:p-8 pointer-events-none select-none filter blur-[6px]">
+              <h2 className={sectionTitle}>
+                <ClipboardList className="h-6 w-6 text-primary" />
+                Room-by-Room Elimination Strategy
+              </h2>
+              <div className="space-y-3">
+                {report.roomByRoomStrategy.map((s, i) => (
+                  <div key={i} className="bg-secondary rounded-lg p-3 text-sm text-muted-foreground">{s}</div>
+                ))}
+              </div>
+
+              <h2 className={`${sectionTitle} mt-8`}>
+                <ShoppingCart className="h-6 w-6 text-primary" />
+                Your Personalized Shopping List
+              </h2>
+              <div className="space-y-2">
+                {report.shoppingList.slice(0, 4).map((item, i) => (
+                  <div key={i} className="flex items-center gap-3 bg-secondary rounded-lg p-3">
+                    <CheckCircle2 className="h-4 w-4 text-accent shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">{item.reason}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <h2 className={`${sectionTitle} mt-8`}>
+                <Calendar className="h-6 w-6 text-primary" />
+                30-Day Elimination Timeline
+              </h2>
+              <div className="space-y-2">
+                {report.eliminationTimeline.slice(0, 3).map((t, i) => (
+                  <div key={i} className="bg-secondary rounded-lg p-3">
+                    <p className="text-sm font-semibold text-foreground">{t.day}</p>
+                    <p className="text-xs text-muted-foreground">{t.action}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <h2 className="text-2xl md:text-3xl font-display font-bold text-primary-foreground mb-3">
-              Get Your Complete Elimination Masterplan
-            </h2>
-            <p className="text-primary-foreground/70 mb-6 max-w-lg mx-auto">
-              You now know what you're dealing with. Get the step-by-step plan to eliminate it — customized to YOUR exact situation.
-            </p>
-            <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto text-left mb-8">
-              {[
-                "Room-by-room strategy",
-                "Exact product shopping list",
-                "Day-by-day protocol",
-                "Prevention calendar",
-                "Decontamination guide",
-                "Downloadable PDF",
-              ].map((item) => (
-                <div key={item} className="flex items-center gap-1.5 text-xs text-primary-foreground/80">
-                  <CheckCircle2 className="h-3 w-3 text-accent shrink-0" />
-                  {item}
+
+            {/* Overlay CTA */}
+            <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+              <div className="text-center px-6 max-w-md">
+                <div className="inline-flex items-center gap-2 bg-accent/20 rounded-full px-4 py-1.5 text-sm text-accent mb-4">
+                  <Sparkles className="h-4 w-4" />
+                  Pro Report
                 </div>
-              ))}
+                <h3 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3">
+                  Unlock Your Complete Elimination Masterplan
+                </h3>
+                <p className="text-muted-foreground mb-6 text-sm">
+                  Get the step-by-step plan to eliminate mice — customized to YOUR exact situation.
+                </p>
+                <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto text-left mb-6">
+                  {[
+                    "Room-by-room strategy",
+                    "Exact product shopping list",
+                    "Day-by-day protocol",
+                    "Prevention calendar",
+                    "Decontamination guide",
+                    "Downloadable PDF",
+                  ].map((item) => (
+                    <div key={item} className="flex items-center gap-1.5 text-xs text-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-accent shrink-0" />
+                      {item}
+                    </div>
+                  ))}
+                </div>
+                <Button variant="premium" size="xl">
+                  <Lock className="h-5 w-5 mr-1" />
+                  Unlock Full Plan — $9.99
+                </Button>
+                <p className="text-muted-foreground text-xs mt-3">One-time payment · Instant access · 100% personalized</p>
+              </div>
             </div>
-            <Button variant="premium" size="xl">
-              <Lock className="h-5 w-5 mr-1" />
-              Unlock Full Plan — $7.99
-            </Button>
-            <p className="text-primary-foreground/40 text-xs mt-3">One-time payment · Instant download · 100% personalized</p>
           </motion.section>
 
           {/* Retake */}
