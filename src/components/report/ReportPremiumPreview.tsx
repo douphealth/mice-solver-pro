@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   ClipboardList, ShoppingCart, Calendar, CheckCircle2,
-  Sparkles, Lock, Shield, Star, ArrowRight
+  Sparkles, Lock, Shield, Star, ArrowRight, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 import type { ReportData } from "@/lib/report-generator";
 
 interface Props {
@@ -11,6 +14,28 @@ interface Props {
 }
 
 export default function ReportPremiumPreview({ report }: Props) {
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { quizResultId: "" },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Checkout failed",
+        description: err.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <motion.section
       className="relative rounded-2xl overflow-hidden"
@@ -103,10 +128,10 @@ export default function ReportPremiumPreview({ report }: Props) {
             ))}
           </div>
 
-          <Button variant="premium" size="xl" className="shadow-xl">
-            <Lock className="h-5 w-5 mr-1" />
-            Unlock Full Plan — $9.99
-            <ArrowRight className="h-4 w-4 ml-1" />
+          <Button variant="premium" size="xl" className="shadow-xl" onClick={handleCheckout} disabled={loading}>
+            {loading ? <Loader2 className="h-5 w-5 mr-1 animate-spin" /> : <Lock className="h-5 w-5 mr-1" />}
+            {loading ? "Redirecting..." : "Unlock Full Plan — $9.99"}
+            {!loading && <ArrowRight className="h-4 w-4 ml-1" />}
           </Button>
 
           <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">
