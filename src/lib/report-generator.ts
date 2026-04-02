@@ -236,17 +236,17 @@ export function generateReport(answers: QuizAnswers): ReportData {
   // Shopping list with affiliate-ready links
   const shoppingList: { name: string; reason: string; affiliateUrl?: string }[] = [];
   if (hasPets || hasKids) {
-    shoppingList.push({ name: "Tomcat Press 'N Set Enclosed Trap (6-pack)", reason: "Child & pet safe enclosed snap traps", affiliateUrl: "https://amzn.to/mouse-trap-enclosed" });
+    shoppingList.push({ name: "Tomcat Press 'N Set Enclosed Trap (6-pack)", reason: "Child & pet safe enclosed snap traps", affiliateUrl: "https://www.amazon.com/s?k=tomcat+press+n+set+mouse+trap+enclosed" });
   } else {
-    shoppingList.push({ name: "Victor M150 Snap Traps (12-pack)", reason: "Most effective traditional snap trap", affiliateUrl: "https://amzn.to/victor-snap-traps" });
+    shoppingList.push({ name: "Victor M150 Snap Traps (12-pack)", reason: "Most effective traditional snap trap", affiliateUrl: "https://www.amazon.com/s?k=victor+m150+snap+trap+mouse" });
   }
-  shoppingList.push({ name: "Xcluder Steel Wool Fill Fabric", reason: "Mice can't chew through — stuff into gaps", affiliateUrl: "https://amzn.to/xcluder-steel-wool" });
-  shoppingList.push({ name: "DAP Alex Plus Caulk", reason: "Seal over steel wool for permanent barrier", affiliateUrl: "https://amzn.to/dap-caulk" });
-  shoppingList.push({ name: "Clorox Bleach Spray", reason: "Sanitize contaminated surfaces (1:10 dilution)", affiliateUrl: "https://amzn.to/clorox-spray" });
-  shoppingList.push({ name: "N95 Respirator Masks (10-pack)", reason: "Protection during cleanup of droppings", affiliateUrl: "https://amzn.to/n95-masks" });
-  shoppingList.push({ name: "Nitrile Disposable Gloves", reason: "Handle droppings and traps safely", affiliateUrl: "https://amzn.to/nitrile-gloves" });
+  shoppingList.push({ name: "Xcluder Steel Wool Fill Fabric", reason: "Mice can't chew through -- stuff into gaps", affiliateUrl: "https://www.amazon.com/s?k=xcluder+steel+wool+fill+fabric" });
+  shoppingList.push({ name: "DAP Alex Plus Caulk", reason: "Seal over steel wool for permanent barrier", affiliateUrl: "https://www.amazon.com/s?k=DAP+alex+plus+caulk" });
+  shoppingList.push({ name: "Clorox Bleach Spray", reason: "Sanitize contaminated surfaces (1:10 dilution)", affiliateUrl: "https://www.amazon.com/s?k=clorox+clean-up+bleach+spray" });
+  shoppingList.push({ name: "N95 Respirator Masks (10-pack)", reason: "Protection during cleanup of droppings", affiliateUrl: "https://www.amazon.com/s?k=3M+N95+respirator+mask" });
+  shoppingList.push({ name: "Nitrile Disposable Gloves", reason: "Handle droppings and traps safely", affiliateUrl: "https://www.amazon.com/s?k=nitrile+disposable+gloves" });
   if (foodStorage === "open" || foodStorage === "mixed") {
-    shoppingList.push({ name: "Glass Food Storage Containers Set", reason: "Mouse-proof your food supply", affiliateUrl: "https://amzn.to/glass-containers" });
+    shoppingList.push({ name: "Glass Food Storage Containers Set", reason: "Mouse-proof your food supply", affiliateUrl: "https://www.amazon.com/s?k=glass+food+storage+containers+airtight" });
   }
 
   // Elimination timeline

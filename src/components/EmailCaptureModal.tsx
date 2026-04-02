@@ -28,7 +28,7 @@ export default function EmailCaptureModal({ open, onClose, onSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
-      await supabase.from("email_subscribers").insert({
+      await (supabase as any).from("email_subscribers").insert({
         email: email.trim().toLowerCase(),
         name: name.trim() || null,
         source: "quiz_gate",

@@ -2,6 +2,7 @@ import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { generateReport } from "@/lib/report-generator";
+import { trackEvent } from "@/lib/analytics";
 import { generatePDF } from "@/lib/pdf-generator";
 import { QuizAnswers } from "@/lib/quiz-data";
 import Navbar from "@/components/Navbar";
@@ -15,12 +16,15 @@ import ReportHealthSection from "@/components/report/ReportHealthSection";
 import ReportEntryPointsSection from "@/components/report/ReportEntryPointsSection";
 import ReportActionsSection from "@/components/report/ReportActionsSection";
 import ReportPremiumPreview from "@/components/report/ReportPremiumPreview";
+import EmailCaptureModal from "@/components/EmailCaptureModal";
 
 export default function ReportPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [factIndex, setFactIndex] = useState(0);
+  const [showEmailGate, setShowEmailGate] = useState(false);
+  const [emailCaptured, setEmailCaptured] = useState(false);
 
   const answers = (location.state as { answers: QuizAnswers } | null)?.answers;
 
@@ -30,7 +34,16 @@ export default function ReportPage() {
       return;
     }
     const factTimer = setInterval(() => setFactIndex((i) => (i + 1) % 8), 2000);
-    const loadTimer = setTimeout(() => setLoading(false), 3000);
+    const loadTimer = setTimeout(() => {
+      setLoading(false);
+      // Show email gate after loading completes
+      const alreadyCaptured = localStorage.getItem("mgq_email_captured") === "true";
+      if (!alreadyCaptured) {
+        setShowEmailGate(true);
+      } else {
+        setEmailCaptured(true);
+      }
+    }, 3000);
     return () => { clearInterval(factTimer); clearTimeout(loadTimer); };
   }, [answers, navigate]);
 
@@ -39,10 +52,21 @@ export default function ReportPage() {
     return generateReport(answers);
   }, [answers]);
 
+  const handleEmailSuccess = () => {
+    localStorage.setItem("mgq_email_captured", "true");
+    setShowEmailGate(false);
+    setEmailCaptured(true);
+    trackEvent("email_captured");
+  };
+
   if (!answers || !report) return null;
   if (loading) return <ReportLoading factIndex={factIndex} />;
+  if (showEmailGate && !emailCaptured) {
+    return <EmailCaptureModal open={true} onClose={() => handleEmailSuccess()} onSuccess={handleEmailSuccess} />;
+  }
 
   const handleDownloadPDF = () => {
+    trackEvent("pdf_downloaded", { severity: report.severity, species: report.species.name });
     const doc = generatePDF(report, false);
     doc.save("MiceGoneGuide-Report.pdf");
   };

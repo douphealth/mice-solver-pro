@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { trackEvent } from "@/lib/analytics";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,7 @@ export default function QuizPage() {
     } else {
       const finalAnswers = { ...answers };
       if (current.type === "zip") finalAnswers.zip = zipValue;
+      trackEvent("quiz_completed", { steps: activeSteps.length });
       navigate("/report", { state: { answers: finalAnswers } });
     }
   };
