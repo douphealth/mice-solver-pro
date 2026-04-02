@@ -2,6 +2,7 @@ import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { generateReport } from "@/lib/report-generator";
+import { trackEvent } from "@/lib/analytics";
 import { generatePDF } from "@/lib/pdf-generator";
 import { QuizAnswers } from "@/lib/quiz-data";
 import Navbar from "@/components/Navbar";
