@@ -1,15 +1,25 @@
-import { motion } from "framer-motion";
-import { Bug } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Shield, Bug, Zap, MapPin, BarChart3, FileText } from "lucide-react";
+import Navbar from "@/components/Navbar";
 
-const mouseFacts = [
-  "Mice can squeeze through a gap the width of a pencil (¼ inch).",
-  "A single pair of mice can produce up to 12,000 descendants in a year.",
-  "Mice can jump 12 inches high and survive falls from 8 feet.",
-  "A mouse needs only 3 grams of food per day to survive.",
-  "Mice are colorblind but have excellent hearing and smell.",
-  "Mice leave 50-75 droppings per day as they move around.",
-  "A mouse's heart beats 632 times per minute.",
-  "Mice can swim and tread water for up to 3 days.",
+const facts = [
+  "Analyzing evidence patterns...",
+  "Identifying rodent species from behavioral data...",
+  "Calculating infestation severity score...",
+  "Mapping probable entry points for your home type...",
+  "Assessing health risks for your household...",
+  "Generating personalized action plan...",
+  "Building your elimination strategy...",
+  "Finalizing your professional report...",
+];
+
+const steps = [
+  { icon: Bug, label: "Species ID", delay: 0 },
+  { icon: BarChart3, label: "Severity", delay: 0.5 },
+  { icon: Shield, label: "Health Risks", delay: 1.0 },
+  { icon: MapPin, label: "Entry Points", delay: 1.5 },
+  { icon: Zap, label: "Action Plan", delay: 2.0 },
+  { icon: FileText, label: "Report", delay: 2.5 },
 ];
 
 interface ReportLoadingProps {
@@ -18,34 +28,53 @@ interface ReportLoadingProps {
 
 export default function ReportLoading({ factIndex }: ReportLoadingProps) {
   return (
-    <div className="min-h-screen bg-hero flex flex-col items-center justify-center px-4">
-      <motion.div
-        animate={{ rotate: 360 }}
-        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-        className="mb-8"
-      >
-        <Bug className="h-16 w-16 text-accent" />
-      </motion.div>
-      <h2 className="text-2xl font-display font-bold text-primary-foreground mb-4">
-        Analyzing Your Situation...
-      </h2>
-      <div className="w-64 bg-primary-foreground/10 rounded-full h-2 mb-6 overflow-hidden">
-        <motion.div
-          className="h-full bg-accent-gradient rounded-full"
-          initial={{ width: "0%" }}
-          animate={{ width: "100%" }}
-          transition={{ duration: 3, ease: "easeInOut" }}
-        />
+    <div className="min-h-screen flex flex-col bg-background">
+      <Navbar />
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="text-center max-w-md w-full">
+          <div className="grid grid-cols-3 gap-3 mb-10 max-w-xs mx-auto">
+            {steps.map((step) => (
+              <motion.div
+                key={step.label}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: step.delay * 0.4, duration: 0.4 }}
+                className="flex flex-col items-center gap-1.5"
+              >
+                <motion.div
+                  className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center"
+                  animate={{ opacity: [0.6, 1, 0.6] }}
+                  transition={{ duration: 2, repeat: Infinity, delay: step.delay * 0.3 }}
+                >
+                  <step.icon className="h-5 w-5 text-primary" />
+                </motion.div>
+                <span className="text-[10px] text-muted-foreground font-medium">{step.label}</span>
+              </motion.div>
+            ))}
+          </div>
+
+          <div className="w-full bg-muted rounded-full h-1.5 mb-6 overflow-hidden">
+            <motion.div
+              className="h-full bg-accent-gradient rounded-full"
+              initial={{ width: "0%" }}
+              animate={{ width: "100%" }}
+              transition={{ duration: 3, ease: "easeInOut" }}
+            />
+          </div>
+
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={factIndex}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="text-sm text-muted-foreground"
+            >
+              {facts[factIndex % facts.length]}
+            </motion.p>
+          </AnimatePresence>
+        </div>
       </div>
-      <motion.p
-        key={factIndex}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0 }}
-        className="text-primary-foreground/60 text-sm text-center max-w-md"
-      >
-        🐭 Did you know? {mouseFacts[factIndex % mouseFacts.length]}
-      </motion.p>
     </div>
   );
 }

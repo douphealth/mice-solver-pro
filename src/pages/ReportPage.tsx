@@ -7,7 +7,7 @@ import { QuizAnswers } from "@/lib/quiz-data";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Download, RotateCcw, Share2, CheckCircle2 } from "lucide-react";
+import { Download, RotateCcw, Share2, CheckCircle2, FileText, Shield, Sparkles } from "lucide-react";
 import ReportLoading from "@/components/report/ReportLoading";
 import ReportSeveritySection from "@/components/report/ReportSeveritySection";
 import ReportSpeciesSection from "@/components/report/ReportSpeciesSection";
@@ -64,25 +64,34 @@ export default function ReportPage() {
       <Navbar />
 
       {/* Report Header */}
-      <div className="bg-hero py-10 md:py-14">
-        <div className="container mx-auto px-4 max-w-3xl text-center">
+      <div className="bg-hero relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,hsl(152_45%_30%/0.3),transparent_50%)]" />
+        <div className="container mx-auto px-4 py-12 md:py-16 max-w-3xl text-center relative z-10">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="inline-flex items-center gap-2 bg-primary-foreground/10 border border-primary-foreground/20 rounded-full px-4 py-1.5 text-sm text-primary-foreground/80 mb-4">
-              <CheckCircle2 className="h-4 w-4" />
-              Analysis Complete
+            <div className="flex items-center justify-center gap-3 mb-5">
+              <span className="trust-badge bg-primary-foreground/10 text-primary-foreground/70">
+                <Shield className="h-3 w-3" />
+                AI-Powered
+              </span>
+              <span className="trust-badge bg-primary-foreground/10 text-primary-foreground/70">
+                <CheckCircle2 className="h-3 w-3" />
+                Analysis Complete
+              </span>
             </div>
-            <h1 className="text-3xl md:text-4xl font-display font-bold text-primary-foreground mb-2">
+
+            <h1 className="text-3xl md:text-5xl font-display font-bold text-primary-foreground mb-3 leading-tight">
               Your Mouse Problem Report
             </h1>
-            <p className="text-primary-foreground/60 text-sm mb-6">
-              AI-powered analysis based on your {Object.keys(answers).length} diagnostic answers
+            <p className="text-primary-foreground/50 text-sm mb-8 max-w-md mx-auto">
+              Professional-grade analysis based on your {Object.keys(answers).length} diagnostic answers
             </p>
+
             <div className="flex flex-wrap gap-3 justify-center">
               <Button
                 variant="hero"
                 size="lg"
                 onClick={handleDownloadPDF}
-                className="gap-2"
+                className="gap-2 shadow-xl"
               >
                 <Download className="h-4 w-4" />
                 Download Free PDF Report
@@ -94,7 +103,7 @@ export default function ReportPage() {
                 className="gap-2"
               >
                 <Share2 className="h-4 w-4" />
-                Share
+                Share Report
               </Button>
             </div>
           </motion.div>
@@ -111,15 +120,22 @@ export default function ReportPage() {
 
           {/* Download CTA between free and premium */}
           <motion.div
-            className="bg-secondary rounded-2xl p-6 text-center"
+            className="glass-card-elevated rounded-2xl p-8 text-center overflow-hidden relative"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.55 }}
           >
-            <p className="text-sm font-medium text-foreground mb-3">
-              📄 Save your free report as a professional PDF
+            <div className="h-1 bg-accent-gradient absolute top-0 left-0 right-0" />
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+              <FileText className="h-6 w-6 text-primary" />
+            </div>
+            <h3 className="text-lg font-display font-bold text-foreground mb-2">
+              Save Your Free Report
+            </h3>
+            <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">
+              Download a professionally formatted PDF with your full severity analysis, species ID, and action plan.
             </p>
-            <Button variant="default" onClick={handleDownloadPDF} className="gap-2">
+            <Button variant="default" size="lg" onClick={handleDownloadPDF} className="gap-2">
               <Download className="h-4 w-4" />
               Download PDF Report (Free)
             </Button>
