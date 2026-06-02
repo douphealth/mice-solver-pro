@@ -580,18 +580,10 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
     y += epLines.length * 4.5 + 4;
   }
 
-  // ===== PAGE 4: IMMEDIATE ACTIONS & RESOURCES =====
+  // ===== IMMEDIATE ACTIONS & RESOURCES =====
   doc.addPage();
   y = 18;
-  doc.setFillColor(...C.light);
-  doc.rect(0, 0, 210, 12, "F");
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 11.5, 210, 0.5, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
-  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
+  pageTopBar(doc);
 
   // SECTION 5: ACTIONS
   y = sectionHeader(doc, y, "3 THINGS TO DO TONIGHT", "05");
