@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Shield, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
+import { Shield, ArrowRight, CheckCircle2, Loader2, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { submitMiceLead } from "@/lib/miceLead";
 
 interface Props {
   open: boolean;
   onSuccess: () => void;
+  severity?: number;
+  species?: string;
 }
 
-export default function EmailCaptureModal({ open, onSuccess }: Props) {
+export default function EmailCaptureModal({ open, onSuccess, severity, species }: Props) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,13 +29,17 @@ export default function EmailCaptureModal({ open, onSuccess }: Props) {
     setLoading(true);
     setError("");
     try {
-      await (supabase as any).from("email_subscribers").insert({
+      await submitMiceLead({
         email: email.trim().toLowerCase(),
-        name: name.trim() || null,
-        source: "quiz_gate",
+        name: name.trim() || undefined,
+        severity,
+        species,
       });
-    } catch {
-      // Non-blocking — still show results even if DB insert fails
+    } catch (err) {
+      console.error("MiceGoneGuide lead capture failed", err);
+      setError("We couldn't send your blueprint yet. Please try again in a moment.");
+      setLoading(false);
+      return;
     }
     setLoading(false);
     onSuccess();
@@ -59,15 +65,24 @@ export default function EmailCaptureModal({ open, onSuccess }: Props) {
 
             <div className="p-8">
               <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
-                <Mail className="h-7 w-7 text-primary" />
+                <Sparkles className="h-7 w-7 text-primary" />
               </div>
 
               <h2 className="text-2xl font-display font-bold text-foreground text-center mb-2">
-                Your Report is Ready!
+                Your Mouse Elimination Blueprint is Ready
               </h2>
               <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-                Enter your email to unlock your personalized diagnostic report, free PDF, and expert mouse elimination tips.
+                Enter your email to unlock your personalized diagnosis and the premium Blueprint PDF — a practical, printable plan with severity insights, entry-point priorities, safety steps, decision filters, and a 30-day elimination action map.
               </p>
+
+              <div className="grid grid-cols-2 gap-2 mb-5 text-left">
+                {["Severity score + species ID", "Tonight's containment checklist", "CDC-aligned cleanup steps", "30-day prevention planner"].map((item) => (
+                  <div key={item} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground flex items-start gap-2">
+                    <FileText className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
 
               <form onSubmit={handleSubmit} className="space-y-3">
                 <Input
@@ -101,18 +116,18 @@ export default function EmailCaptureModal({ open, onSuccess }: Props) {
                   ) : (
                     <ArrowRight className="h-4 w-4" />
                   )}
-                  {loading ? "Loading..." : "View My Free Report"}
+                  {loading ? "Sending Blueprint..." : "Unlock Report + Free Blueprint PDF"}
                 </Button>
               </form>
 
               <div className="flex items-center justify-center gap-4 mt-5 text-[10px] text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Shield className="h-3 w-3" />
-                  No spam, ever
+                  No spam
                 </span>
                 <span className="flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" />
-                  Unsubscribe anytime
+                  PDF after capture
                 </span>
               </div>
             </div>

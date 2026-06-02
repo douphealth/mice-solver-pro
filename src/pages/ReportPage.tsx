@@ -55,13 +55,13 @@ export default function ReportPage() {
   if (!answers || !report) return null;
   if (loading) return <ReportLoading factIndex={factIndex} />;
   if (showEmailGate && !emailCaptured) {
-    return <EmailCaptureModal open={true} onSuccess={handleEmailSuccess} />;
+    return <EmailCaptureModal open={true} onSuccess={handleEmailSuccess} severity={report.severity} species={report.species.name} />;
   }
 
   const handleDownloadPDF = () => {
     trackEvent("pdf_downloaded", { severity: report.severity, species: report.species.name });
     const doc = generatePDF(report, false);
-    doc.save("MiceGoneGuide-Report.pdf");
+    doc.save("MiceGoneGuide-Premium-Elimination-Blueprint.pdf");
   };
 
   const handleShare = async () => {
@@ -111,7 +111,7 @@ export default function ReportPage() {
                 className="gap-2 shadow-xl"
               >
                 <Download className="h-4 w-4" />
-                Download Free PDF Report
+                Download Free Blueprint PDF
               </Button>
               <Button
                 variant="hero-outline"
@@ -147,14 +147,14 @@ export default function ReportPage() {
               <FileText className="h-6 w-6 text-primary" />
             </div>
             <h3 className="text-lg font-display font-bold text-foreground mb-2">
-              Save Your Free Report
+              Save Your Premium Blueprint
             </h3>
             <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">
-              Download a professionally formatted PDF with your full severity analysis, species ID, and action plan.
+              Download a premium, printable elimination blueprint with your diagnostic score, species ID, likely entry points, safety protocol, tonight checklist, decision filters, and prevention planner.
             </p>
             <Button variant="default" size="lg" onClick={handleDownloadPDF} className="gap-2">
               <Download className="h-4 w-4" />
-              Download PDF Report (Free)
+              Download Free Blueprint PDF
             </Button>
           </motion.div>
 

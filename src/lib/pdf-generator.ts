@@ -97,14 +97,14 @@ function drawCoverPage(doc: jsPDF, report: ReportData) {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(32);
   doc.setFont("helvetica", "bold");
-  doc.text("MOUSE PROBLEM", 105, 90, { align: "center" });
-  doc.text("DIAGNOSTIC REPORT", 105, 105, { align: "center" });
+  doc.text("MOUSE ELIMINATION", 105, 90, { align: "center" });
+  doc.text("BLUEPRINT", 105, 105, { align: "center" });
 
   // Subtitle
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(170, 200, 180);
-  doc.text("AI-Powered Infestation Analysis & Action Plan", 105, 120, { align: "center" });
+  doc.text("Premium Diagnostic Report, Safety Plan & Action Workbook", 105, 120, { align: "center" });
 
   // Severity badge — large centered
   const badgeColor = report.severity <= 3 ? C.green : report.severity <= 6 ? C.yellow : C.red;
@@ -383,6 +383,98 @@ function addLink(doc: jsPDF, text: string, url: string, x: number, y: number, fo
   doc.setLineWidth(0.15);
   doc.line(x, y + 0.5, x + tw, y + 0.5);
   doc.link(x, y - 3, tw, 5, { url });
+}
+
+
+function premiumBlueprintCard(doc: jsPDF, y: number, title: string, body: string, accent: [number, number, number] = C.primary): number {
+  const bodyLines = doc.splitTextToSize(sanitize(body), CONTENT_W - 16);
+  const h = Math.max(20, bodyLines.length * 4.2 + 13);
+  y = checkPage(doc, y, h + 4);
+  doc.setFillColor(...C.cardBg);
+  doc.setDrawColor(...accent);
+  doc.setLineWidth(0.45);
+  doc.roundedRect(MARGIN_L, y, CONTENT_W, h, 3, 3, "FD");
+  doc.setFillColor(...accent);
+  doc.roundedRect(MARGIN_L, y, 4, h, 1, 1, "F");
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...accent);
+  doc.text(sanitize(title).toUpperCase(), MARGIN_L + 9, y + 6);
+  doc.setFontSize(8.3);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...C.text);
+  doc.text(bodyLines, MARGIN_L + 9, y + 12);
+  return y + h + 4;
+}
+
+function workbookLines(doc: jsPDF, y: number, label: string, lines: number = 4): number {
+  y = checkPage(doc, y, lines * 8 + 12);
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.primary);
+  doc.text(sanitize(label), MARGIN_L, y);
+  y += 7;
+  doc.setDrawColor(...C.divider);
+  doc.setLineWidth(0.25);
+  for (let i = 0; i < lines; i++) {
+    doc.line(MARGIN_L, y, MARGIN_R, y);
+    y += 8;
+  }
+  return y + 2;
+}
+
+function drawPremiumBlueprintWorkbook(doc: jsPDF, report: ReportData) {
+  doc.addPage();
+  pageTopBar(doc);
+  let y = 20;
+  y = sectionHeader(doc, y, "PREMIUM ELIMINATION BLUEPRINT", "B1");
+  y = textBlock(doc, `This blueprint converts your diagnosis into a practical homeowner operating plan. Start with containment tonight, then move through sealing, trapping, cleanup, and prevention in the right order for a ${sanitize(report.severityLabel).toLowerCase()} ${sanitize(report.species.name)} situation.`, MARGIN_L, y, CONTENT_W, 9);
+  y += 3;
+  y = premiumBlueprintCard(doc, y, "Tonight's containment objective", "Reduce food access, block movement into clean zones, identify the top 2 likely entry routes, and place traps where mice already travel. Do not begin deep cleanup until active droppings/urine areas are wetted with disinfectant first.", C.gold);
+  y = premiumBlueprintCard(doc, y, "Severity-based focus", `Your score is ${report.severity}/10. If activity is spreading across rooms, prioritize containment and sealing before cosmetic cleaning. If sightings are daytime or droppings are fresh daily, escalate faster and consider a licensed professional.`, report.severity >= 7 ? C.red : C.primary);
+  y = premiumBlueprintCard(doc, y, "Species-specific clue", `${sanitize(report.species.name)} behavior: ${sanitize(report.species.behavior)} Use this to place traps along actual routes instead of guessing in open floor space.`, C.green);
+
+  doc.addPage();
+  pageTopBar(doc);
+  y = 20;
+  y = sectionHeader(doc, y, "DECISION FILTER: WHAT TO DO FIRST", "B2");
+  const filters = [
+    ["Safety", "Are there droppings/urine/nesting materials? Wet-clean only; never dry sweep or vacuum contaminated debris."],
+    ["Food pressure", "What food, pet food, crumbs, trash, bird seed, or pantry item is rewarding the route? Remove rewards before adding traps."],
+    ["Travel route", "Where do walls, cabinets, appliances, pipes, or baseboards create a runway? Place traps perpendicular to those routes."],
+    ["Entry point", "What gap can be sealed today with steel wool/copper mesh + sealant? Prioritize holes near utilities, doors, garages, and foundations."],
+    ["Proof", "What will you track tomorrow morning: trap activity, fresh droppings, new sounds, food disturbance, or camera footage?"],
+  ];
+  filters.forEach(([title, body]) => { y = premiumBlueprintCard(doc, y, title, body, title === "Safety" ? C.red : C.primary); });
+
+  doc.addPage();
+  pageTopBar(doc);
+  y = 20;
+  y = sectionHeader(doc, y, "ENTRY-POINT AUDIT WORKSHEET", "B3");
+  y = textBlock(doc, "Walk the exterior and interior slowly. Mice can use extremely small gaps, especially around pipes, utility lines, garage weatherstripping, doors, vents, sill plates, and foundation cracks.", MARGIN_L, y, CONTENT_W, 9);
+  ["Kitchen / pantry / appliances", "Garage / basement / utility lines", "Exterior foundation / siding / vents", "Attic / roofline / soffits", "Doors / weatherstripping / thresholds"].forEach((area) => {
+    y = workbookLines(doc, y, `${area}: evidence + seal plan`, 3);
+  });
+
+  doc.addPage();
+  pageTopBar(doc);
+  y = 20;
+  y = sectionHeader(doc, y, "30-DAY ELIMINATION MAP", "B4");
+  const weeks = [
+    ["Days 1-3: Contain", "Remove food rewards, isolate contaminated zones, place traps on travel routes, document fresh activity, and wet-clean only after disinfectant contact time."],
+    ["Days 4-10: Seal", "Close confirmed gaps with rodent-resistant materials. Recheck utilities, doors, garage edges, exterior pipes, and cabinet penetrations."],
+    ["Days 11-20: Deplete", "Maintain trap pressure, move traps only when evidence shifts, and monitor whether droppings/sounds decrease."],
+    ["Days 21-30: Prove prevention", "Confirm no fresh droppings, smells, food disturbance, or sounds. Reset sanitation routines and monthly exterior checks."],
+  ];
+  weeks.forEach(([title, body]) => { y = premiumBlueprintCard(doc, y, title, body, title.includes("1-3") ? C.gold : C.primary); });
+  y = workbookLines(doc, y, "My top 3 actions this week", 5);
+
+  doc.addPage();
+  pageTopBar(doc);
+  y = 20;
+  y = sectionHeader(doc, y, "PRINTABLE TRACKING LOG", "B5");
+  y = textBlock(doc, "Track evidence daily. The goal is not just fewer sightings -- it is no new droppings, no fresh sounds, no food disturbance, and no trap activity over time.", MARGIN_L, y, CONTENT_W, 9);
+  ["Day / room / evidence found", "Trap placement + result", "Food or attractant removed", "Gap found or sealed", "Next adjustment"].forEach((label) => { y = workbookLines(doc, y, label, 3); });
 }
 
 export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
@@ -837,6 +929,9 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
       py += pLines.length * 4.5 + 4;
     }
   }
+
+
+  drawPremiumBlueprintWorkbook(doc, report);
 
   // ===== FOOTER on every page =====
   const pageCount = doc.getNumberOfPages();
