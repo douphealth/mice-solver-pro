@@ -468,6 +468,13 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
   doc.text("Mice can reproduce every 19-21 days. Early action prevents exponential growth.", MARGIN_L + 8, y + 10.5);
   y += 18;
 
+  y = factCallout(
+    doc,
+    y,
+    "Mice are capable of squeezing through openings as small as a quarter-inch (6 mm) — roughly the width of a pencil. This is why sealing entry points is as critical as trapping.",
+    "U.S. CDC, Integrated Pest Management Guidance"
+  );
+
   // SECTION 2: SPECIES ID
   y = sectionHeader(doc, y, "RODENT SPECIES IDENTIFICATION", "02");
 
