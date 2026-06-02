@@ -1,17 +1,16 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Shield, ArrowRight, X, CheckCircle2, Loader2 } from "lucide-react";
+import { Mail, Shield, ArrowRight, CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
   open: boolean;
-  onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function EmailCaptureModal({ open, onClose, onSuccess }: Props) {
+export default function EmailCaptureModal({ open, onSuccess }: Props) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,10 +39,6 @@ export default function EmailCaptureModal({ open, onClose, onSuccess }: Props) {
     onSuccess();
   };
 
-  const handleSkip = () => {
-    onSuccess();
-  };
-
   return (
     <AnimatePresence>
       {open && (
@@ -62,13 +57,6 @@ export default function EmailCaptureModal({ open, onClose, onSuccess }: Props) {
             {/* Top accent */}
             <div className="h-1.5 bg-accent-gradient" />
 
-            <button
-              onClick={handleSkip}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
             <div className="p-8">
               <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
                 <Mail className="h-7 w-7 text-primary" />
@@ -78,7 +66,7 @@ export default function EmailCaptureModal({ open, onClose, onSuccess }: Props) {
                 Your Report is Ready!
               </h2>
               <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-                Enter your email to unlock your personalized diagnostic report and receive expert mouse elimination tips.
+                Enter your email to unlock your personalized diagnostic report, free PDF, and expert mouse elimination tips.
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-3">
@@ -116,13 +104,6 @@ export default function EmailCaptureModal({ open, onClose, onSuccess }: Props) {
                   {loading ? "Loading..." : "View My Free Report"}
                 </Button>
               </form>
-
-              <button
-                onClick={handleSkip}
-                className="w-full text-center text-xs text-muted-foreground mt-4 hover:text-foreground transition-colors"
-              >
-                Skip — show me my report
-              </button>
 
               <div className="flex items-center justify-center gap-4 mt-5 text-[10px] text-muted-foreground">
                 <span className="flex items-center gap-1">

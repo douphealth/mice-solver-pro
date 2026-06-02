@@ -36,13 +36,7 @@ export default function ReportPage() {
     const factTimer = setInterval(() => setFactIndex((i) => (i + 1) % 8), 2000);
     const loadTimer = setTimeout(() => {
       setLoading(false);
-      // Show email gate after loading completes
-      const alreadyCaptured = localStorage.getItem("mgq_email_captured") === "true";
-      if (!alreadyCaptured) {
-        setShowEmailGate(true);
-      } else {
-        setEmailCaptured(true);
-      }
+      setShowEmailGate(true);
     }, 3000);
     return () => { clearInterval(factTimer); clearTimeout(loadTimer); };
   }, [answers, navigate]);
@@ -53,7 +47,6 @@ export default function ReportPage() {
   }, [answers]);
 
   const handleEmailSuccess = () => {
-    localStorage.setItem("mgq_email_captured", "true");
     setShowEmailGate(false);
     setEmailCaptured(true);
     trackEvent("email_captured");
@@ -62,7 +55,7 @@ export default function ReportPage() {
   if (!answers || !report) return null;
   if (loading) return <ReportLoading factIndex={factIndex} />;
   if (showEmailGate && !emailCaptured) {
-    return <EmailCaptureModal open={true} onClose={() => handleEmailSuccess()} onSuccess={handleEmailSuccess} />;
+    return <EmailCaptureModal open={true} onSuccess={handleEmailSuccess} />;
   }
 
   const handleDownloadPDF = () => {
