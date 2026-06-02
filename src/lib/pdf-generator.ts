@@ -190,8 +190,10 @@ function pageTopBar(doc: jsPDF) {
 
 // Cited "Verified Fact" callout — elevates credibility
 function factCallout(doc: jsPDF, y: number, fact: string, source: string): number {
-  const lines = doc.splitTextToSize(sanitize(fact), CONTENT_W - 18);
-  const h = lines.length * 4 + 12;
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  const lines = doc.splitTextToSize(sanitize(fact), CONTENT_W - 14);
+  const h = lines.length * 4 + 13;
   y = checkPage(doc, y, h + 4);
   doc.setFillColor(238, 244, 255);
   doc.setDrawColor(...C.blue);
