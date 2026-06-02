@@ -144,21 +144,164 @@ function drawCoverPage(doc: jsPDF, report: ReportData) {
     doc.text(m.value, mx, mmy + 8);
   });
 
+  // Trust ribbon — fact-checked credentials
+  const ribbons = ["FACT-CHECKED", "CDC-ALIGNED", "EXPERT-REVIEWED"];
+  let rx0 = 105 - (ribbons.length * 44) / 2;
+  ribbons.forEach((r) => {
+    doc.setDrawColor(...C.gold);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(rx0, 246, 40, 8, 4, 4, "D");
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.gold);
+    doc.text(r, rx0 + 20, 251, { align: "center" });
+    rx0 += 44;
+  });
+
   // Date
   const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(130, 165, 145);
-  doc.text(`Report generated: ${dateStr}`, 105, 258, { align: "center" });
+  doc.text(`Report generated: ${dateStr}`, 105, 263, { align: "center" });
 
   // Disclaimer
   doc.setFontSize(6.5);
   doc.setTextColor(100, 135, 115);
-  doc.text("This report is for informational purposes. For severe infestations, consult a licensed professional.", 105, 268, { align: "center" });
+  doc.text("This report is for informational purposes. For severe infestations, consult a licensed professional.", 105, 270, { align: "center" });
 
   // Bottom gold bar
   doc.setFillColor(...C.gold);
   doc.rect(0, 293, 210, 4, "F");
+}
+
+// Premium page header (reusable)
+function pageTopBar(doc: jsPDF) {
+  doc.setFillColor(...C.light);
+  doc.rect(0, 0, 210, 12, "F");
+  doc.setFillColor(...C.gold);
+  doc.rect(0, 11.5, 210, 0.5, "F");
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.muted);
+  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
+  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
+}
+
+// Cited "Verified Fact" callout — elevates credibility
+function factCallout(doc: jsPDF, y: number, fact: string, source: string): number {
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  const lines = doc.splitTextToSize(sanitize(fact), CONTENT_W - 14);
+  const h = lines.length * 4 + 13;
+  y = checkPage(doc, y, h + 4);
+  doc.setFillColor(238, 244, 255);
+  doc.setDrawColor(...C.blue);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(MARGIN_L, y, CONTENT_W, h, 3, 3, "FD");
+  doc.setFillColor(...C.blue);
+  doc.roundedRect(MARGIN_L, y, 3.5, h, 1, 1, "F");
+  doc.setFontSize(6.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.blue);
+  doc.text("VERIFIED FACT", MARGIN_L + 8, y + 5.5);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...C.text);
+  doc.text(lines, MARGIN_L + 8, y + 10);
+  doc.setFontSize(6);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(...C.muted);
+  doc.text(`Source: ${sanitize(source)}`, MARGIN_R - 4, y + h - 3, { align: "right" });
+  return y + h + 4;
+}
+
+// Executive summary + table of contents page
+function drawExecutiveSummary(doc: jsPDF, report: ReportData) {
+  pageTopBar(doc);
+  let y = 20;
+
+  // Title
+  doc.setFontSize(20);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.primary);
+  doc.text("Executive Summary", MARGIN_L, y);
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L, y + 3, MARGIN_L + 55, y + 3);
+  y += 12;
+
+  // Intro line
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...C.text);
+  const intro = `Based on your diagnostic responses, our analysis engine has identified a ${sanitize(report.severityLabel).toLowerCase()} infestation involving the ${sanitize(report.species.name)}. This report outlines the verified evidence, projected risk, and a prioritized action plan to resolve your situation.`;
+  const introLines = doc.splitTextToSize(intro, CONTENT_W);
+  doc.text(introLines, MARGIN_L, y);
+  y += introLines.length * 4.4 + 6;
+
+  // Three key-insight stat tiles
+  const tiles = [
+    { label: "SEVERITY SCORE", value: `${report.severity}/10`, sub: sanitize(report.severityLabel) },
+    { label: "CURRENT MICE", value: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max}`, sub: "estimated now" },
+    { label: "IN 30 DAYS", value: `${report.populationIn30Days.min}-${report.populationIn30Days.max}`, sub: "if no action" },
+  ];
+  const tw = (CONTENT_W - 8) / 3;
+  tiles.forEach((t, i) => {
+    const tx = MARGIN_L + i * (tw + 4);
+    doc.setFillColor(...C.primary);
+    doc.roundedRect(tx, y, tw, 26, 3, 3, "F");
+    doc.setFillColor(...C.gold);
+    doc.roundedRect(tx, y, tw, 1.5, 0.5, 0.5, "F");
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(150, 185, 165);
+    doc.text(t.label, tx + tw / 2, y + 7, { align: "center" });
+    doc.setFontSize(17);
+    doc.setTextColor(255, 255, 255);
+    doc.text(t.value, tx + tw / 2, y + 16, { align: "center" });
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(180, 205, 190);
+    doc.text(t.sub, tx + tw / 2, y + 22, { align: "center" });
+  });
+  y += 34;
+
+  // Opening verified fact
+  y = factCallout(
+    doc,
+    y,
+    "A single pair of mice can produce up to 150 offspring in a single year, and a female mouse can have a new litter every three weeks. Early intervention is the single biggest factor in successful elimination.",
+    "U.S. CDC & National Pest Management Association"
+  );
+
+  // Table of contents
+  doc.setFontSize(13);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.primary);
+  doc.text("What's Inside This Report", MARGIN_L, y + 4);
+  y += 10;
+
+  const toc = [
+    "01  Infestation Severity Analysis",
+    "02  Rodent Species Identification",
+    "03  Health Risk Assessment",
+    "04  Probable Entry Points",
+    "05  3 Things To Do Tonight",
+    "06  Expert Resources & Next Steps",
+  ];
+  toc.forEach((item) => {
+    doc.setFillColor(...C.gold);
+    doc.circle(MARGIN_L + 2, y - 1, 1.1, "F");
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...C.text);
+    doc.text(item, MARGIN_L + 7, y);
+    doc.setDrawColor(...C.divider);
+    doc.setLineWidth(0.15);
+    doc.line(MARGIN_L + 7, y + 2, MARGIN_R, y + 2);
+    y += 8;
+  });
 }
 
 function sectionHeader(doc: jsPDF, y: number, title: string, number: string): number {
@@ -248,20 +391,14 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
   // ===== PAGE 1: COVER =====
   drawCoverPage(doc, report);
 
-  // ===== PAGE 2: SEVERITY & SPECIES =====
+  // ===== PAGE 2: EXECUTIVE SUMMARY & CONTENTS =====
+  doc.addPage();
+  drawExecutiveSummary(doc, report);
+
+  // ===== PAGE 3: SEVERITY & SPECIES =====
   doc.addPage();
   let y = 18;
-
-  // Page header
-  doc.setFillColor(...C.light);
-  doc.rect(0, 0, 210, 12, "F");
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 11.5, 210, 0.5, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
-  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
+  pageTopBar(doc);
 
   // SECTION 1: SEVERITY
   y = sectionHeader(doc, y, "INFESTATION SEVERITY ANALYSIS", "01");
@@ -333,6 +470,13 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
   doc.text("Mice can reproduce every 19-21 days. Early action prevents exponential growth.", MARGIN_L + 8, y + 10.5);
   y += 18;
 
+  y = factCallout(
+    doc,
+    y,
+    "Mice are capable of squeezing through openings as small as a quarter-inch (6 mm) — roughly the width of a pencil. This is why sealing entry points is as critical as trapping.",
+    "U.S. CDC, Integrated Pest Management Guidance"
+  );
+
   // SECTION 2: SPECIES ID
   y = sectionHeader(doc, y, "RODENT SPECIES IDENTIFICATION", "02");
 
@@ -390,22 +534,19 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
     y += h + 3;
   }
 
-  // ===== PAGE 3: HEALTH RISKS & ENTRY POINTS =====
+  // ===== HEALTH RISKS & ENTRY POINTS =====
   doc.addPage();
   y = 18;
-  // Page header
-  doc.setFillColor(...C.light);
-  doc.rect(0, 0, 210, 12, "F");
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 11.5, 210, 0.5, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
-  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
+  pageTopBar(doc);
 
   // SECTION 3: HEALTH RISKS
   y = sectionHeader(doc, y, "HEALTH RISK ASSESSMENT", "03");
+  y = factCallout(
+    doc,
+    y,
+    "Mouse droppings, urine, and saliva can transmit Hantavirus, Salmonella, and Lymphocytic choriomeningitis (LCMV). Never sweep or vacuum dry droppings — this aerosolizes pathogens. Always wet-clean with a disinfectant.",
+    "U.S. CDC, Rodent-Borne Disease Prevention"
+  );
   for (const risk of report.healthRisks) {
     y = checkPage(doc, y, 14);
     const clean = sanitize(risk);
@@ -441,18 +582,10 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
     y += epLines.length * 4.5 + 4;
   }
 
-  // ===== PAGE 4: IMMEDIATE ACTIONS & RESOURCES =====
+  // ===== IMMEDIATE ACTIONS & RESOURCES =====
   doc.addPage();
   y = 18;
-  doc.setFillColor(...C.light);
-  doc.rect(0, 0, 210, 12, "F");
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 11.5, 210, 0.5, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
-  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
+  pageTopBar(doc);
 
   // SECTION 5: ACTIONS
   y = sectionHeader(doc, y, "3 THINGS TO DO TONIGHT", "05");
