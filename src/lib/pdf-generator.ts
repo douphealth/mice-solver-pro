@@ -532,22 +532,19 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
     y += h + 3;
   }
 
-  // ===== PAGE 3: HEALTH RISKS & ENTRY POINTS =====
+  // ===== HEALTH RISKS & ENTRY POINTS =====
   doc.addPage();
   y = 18;
-  // Page header
-  doc.setFillColor(...C.light);
-  doc.rect(0, 0, 210, 12, "F");
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 11.5, 210, 0.5, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
-  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
+  pageTopBar(doc);
 
   // SECTION 3: HEALTH RISKS
   y = sectionHeader(doc, y, "HEALTH RISK ASSESSMENT", "03");
+  y = factCallout(
+    doc,
+    y,
+    "Mouse droppings, urine, and saliva can transmit Hantavirus, Salmonella, and Lymphocytic choriomeningitis (LCMV). Never sweep or vacuum dry droppings — this aerosolizes pathogens. Always wet-clean with a disinfectant.",
+    "U.S. CDC, Rodent-Borne Disease Prevention"
+  );
   for (const risk of report.healthRisks) {
     y = checkPage(doc, y, 14);
     const clean = sanitize(risk);
