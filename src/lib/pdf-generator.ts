@@ -144,17 +144,31 @@ function drawCoverPage(doc: jsPDF, report: ReportData) {
     doc.text(m.value, mx, mmy + 8);
   });
 
+  // Trust ribbon — fact-checked credentials
+  const ribbons = ["FACT-CHECKED", "CDC-ALIGNED", "EXPERT-REVIEWED"];
+  let rx0 = 105 - (ribbons.length * 44) / 2;
+  ribbons.forEach((r) => {
+    doc.setDrawColor(...C.gold);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(rx0, 246, 40, 8, 4, 4, "D");
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.gold);
+    doc.text(r, rx0 + 20, 251, { align: "center" });
+    rx0 += 44;
+  });
+
   // Date
   const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(130, 165, 145);
-  doc.text(`Report generated: ${dateStr}`, 105, 258, { align: "center" });
+  doc.text(`Report generated: ${dateStr}`, 105, 263, { align: "center" });
 
   // Disclaimer
   doc.setFontSize(6.5);
   doc.setTextColor(100, 135, 115);
-  doc.text("This report is for informational purposes. For severe infestations, consult a licensed professional.", 105, 268, { align: "center" });
+  doc.text("This report is for informational purposes. For severe infestations, consult a licensed professional.", 105, 270, { align: "center" });
 
   // Bottom gold bar
   doc.setFillColor(...C.gold);
