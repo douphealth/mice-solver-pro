@@ -389,20 +389,14 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
   // ===== PAGE 1: COVER =====
   drawCoverPage(doc, report);
 
-  // ===== PAGE 2: SEVERITY & SPECIES =====
+  // ===== PAGE 2: EXECUTIVE SUMMARY & CONTENTS =====
+  doc.addPage();
+  drawExecutiveSummary(doc, report);
+
+  // ===== PAGE 3: SEVERITY & SPECIES =====
   doc.addPage();
   let y = 18;
-
-  // Page header
-  doc.setFillColor(...C.light);
-  doc.rect(0, 0, 210, 12, "F");
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 11.5, 210, 0.5, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
-  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
+  pageTopBar(doc);
 
   // SECTION 1: SEVERITY
   y = sectionHeader(doc, y, "INFESTATION SEVERITY ANALYSIS", "01");
