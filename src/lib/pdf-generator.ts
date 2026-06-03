@@ -806,7 +806,7 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.text("Upgrade for $9.99 -- One-Time", 105, y + 53 + 2, { align: "center" });
-    doc.link(55, y + 53 - 5, 100, 11, { url: "https://app.micegoneguide.com/quiz" });
+    doc.link(55, y + 53 - 5, 100, 11, { url: "https://elimination.micegoneguide.com/quiz" });
   }
 
   // ===== PRO CONTENT =====

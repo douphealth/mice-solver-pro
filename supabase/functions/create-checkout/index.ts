@@ -44,7 +44,7 @@ serve(async (req) => {
       }
     }
 
-    const origin = req.headers.get("origin") || "https://mice-solver-pro.lovable.app";
+    const origin = req.headers.get("origin") || "https://elimination.micegoneguide.com";
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

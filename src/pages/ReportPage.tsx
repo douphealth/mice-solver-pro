@@ -69,10 +69,10 @@ export default function ReportPage() {
       await navigator.share({
         title: "My Mouse Problem Report — MiceGoneGuide",
         text: `I scored ${report.severity}/10 on the MiceGoneGuide mouse infestation diagnostic. Get your free report:`,
-        url: "https://app.micegoneguide.com/quiz",
+        url: "https://elimination.micegoneguide.com/quiz",
       });
     } else {
-      await navigator.clipboard.writeText("https://app.micegoneguide.com/quiz");
+      await navigator.clipboard.writeText("https://elimination.micegoneguide.com/quiz");
     }
   };
 

@@ -32,7 +32,7 @@ npm run dev
 
 ## Links
 
-- **App**: [app.micegoneguide.com](https://app.micegoneguide.com)
+- **App**: [app.micegoneguide.com](https://elimination.micegoneguide.com)
 - **Blog**: [micegoneguide.com](https://micegoneguide.com)
 
 ---
