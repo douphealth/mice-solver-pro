@@ -13,4 +13,4 @@ Allow: /
 User-agent: *
 Allow: /
 
-Sitemap: https://mice-solver-pro.lovable.app/sitemap.xml
+Sitemap: https://elimination.micegoneguide.com/sitemap.xml
