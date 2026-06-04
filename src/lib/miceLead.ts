@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 export interface MiceLeadPayload {
   email: string;
   name?: string;
@@ -6,22 +8,14 @@ export interface MiceLeadPayload {
 }
 
 export async function submitMiceLead(payload: MiceLeadPayload) {
-  const response = await fetch('/api/mice-elimination-lead', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const { data, error } = await supabase.functions.invoke("mice-elimination-lead", {
+    body: payload,
   });
 
-  let body: { ok?: boolean; message?: string } = {};
-  try {
-    body = await response.json();
-  } catch {
-    body = {};
+  if (error) {
+    console.error("Supabase edge function error:", error);
+    throw new Error(error.message || 'Could not send your blueprint email.');
   }
 
-  if (!response.ok || body.ok === false) {
-    throw new Error(body.message || 'Could not send your blueprint email.');
-  }
-
-  return body;
+  return data;
 }
