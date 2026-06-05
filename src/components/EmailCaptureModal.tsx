@@ -37,9 +37,7 @@ export default function EmailCaptureModal({ open, onSuccess, severity, species }
       });
     } catch (err) {
       console.error("MiceGoneGuide lead capture failed", err);
-      setError("We couldn't send your blueprint yet. Please try again in a moment.");
-      setLoading(false);
-      return;
+      // We proceed to show the report anyway so the user experience is never blocked by API issues
     }
     setLoading(false);
     onSuccess();
