@@ -21,7 +21,7 @@ function isQuizAnswers(value: unknown): value is QuizAnswers {
 
 export function saveQuizAnswers(answers: QuizAnswers) {
   if (!canUseStorage()) return;
-  try { sessionStorage.setItem(QUIZ_ANSWERS_KEY, JSON.stringify(answers)); } catch {}
+  try { sessionStorage.setItem(QUIZ_ANSWERS_KEY, JSON.stringify(answers)); } catch { /* Storage is optional. */ }
 }
 
 export function loadQuizAnswers(): QuizAnswers | null {
@@ -36,7 +36,7 @@ export function loadQuizAnswers(): QuizAnswers | null {
 
 export function saveCapturedEmail(email: string) {
   if (!canUseStorage()) return;
-  try { sessionStorage.setItem(CAPTURED_EMAIL_KEY, email.trim().toLowerCase()); } catch {}
+  try { sessionStorage.setItem(CAPTURED_EMAIL_KEY, email.trim().toLowerCase()); } catch { /* Storage is optional. */ }
 }
 
 export function loadCapturedEmail(): string {
@@ -49,7 +49,7 @@ export function savePaidReport(cache: PaidReportCache) {
   try {
     localStorage.setItem(PAID_REPORT_PREFIX + cache.sessionId, JSON.stringify(cache));
     localStorage.setItem(LAST_PAID_SESSION_KEY, cache.sessionId);
-  } catch {}
+  } catch { /* Storage is optional. */ }
 }
 
 export function loadPaidReport(sessionId?: string | null): PaidReportCache | null {
