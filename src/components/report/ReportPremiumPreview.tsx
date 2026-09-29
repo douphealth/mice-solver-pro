@@ -47,8 +47,9 @@ export default function ReportPremiumPreview({ report, answers, capturedEmail, i
       if(!r.ok||!b?.url) throw new Error(b?.error||"Unable to start secure checkout.");
       trackEvent("premium_checkout_started",{amount:b.amountTotal??offer.unitAmount,currency:b.currency??offer.currency});
       window.location.assign(b.url);
-    }catch(e:any){
-      toast({title:"Checkout unavailable",description:e?.message||"Please try again.",variant:"destructive"});
+    }catch(error: unknown){
+      const message = error instanceof Error ? error.message : "Please try again.";
+      toast({title:"Checkout unavailable",description:message,variant:"destructive"});
       setLoading(false);
     }
   };
