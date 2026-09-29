@@ -26,3 +26,10 @@ dist-ssr
 # Bun lockfiles
 bun.lock
 bun.lockb
+
+
+# Environment files
+.env
+.env.*
+!.env.example
+supabase/functions/.env
