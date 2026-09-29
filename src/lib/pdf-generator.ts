@@ -1,26 +1,45 @@
 import jsPDF from "jspdf";
 import { ReportData } from "./report-generator";
+import { QuizAnswers, quizSteps } from "./quiz-data";
+
+/* ============================================================================
+   MiceGoneGuide — Premium Elimination Blueprint PDF
+   A modern, print-efficient, vector-only report design system.
+   Cover + closing are full-bleed; content pages stay light for cheap printing.
+   ============================================================================ */
+
+type RGB = [number, number, number];
 
 const C = {
-  primary: [22, 58, 36] as [number, number, number],
-  primaryLight: [35, 85, 55] as [number, number, number],
-  gold: [195, 155, 55] as [number, number, number],
-  goldLight: [245, 235, 210] as [number, number, number],
-  dark: [20, 25, 22] as [number, number, number],
-  text: [35, 42, 38] as [number, number, number],
-  muted: [110, 120, 115] as [number, number, number],
-  light: [248, 246, 240] as [number, number, number],
-  white: [255, 255, 255] as [number, number, number],
-  red: [190, 55, 55] as [number, number, number],
-  redBg: [255, 242, 242] as [number, number, number],
-  yellow: [195, 150, 35] as [number, number, number],
-  green: [40, 130, 70] as [number, number, number],
-  greenBg: [238, 248, 242] as [number, number, number],
-  blue: [30, 80, 150] as [number, number, number],
-  cardBg: [252, 251, 248] as [number, number, number],
-  divider: [225, 222, 215] as [number, number, number],
+  forest: [18, 46, 29] as RGB,       // deep brand green
+  forestDeep: [11, 30, 19] as RGB,   // cover background
+  emerald: [27, 107, 60] as RGB,
+  gold: [198, 154, 42] as RGB,
+  goldDeep: [150, 112, 26] as RGB,
+  goldSoft: [247, 238, 212] as RGB,
+  paper: [250, 248, 243] as RGB,
+  ink: [24, 30, 27] as RGB,
+  body: [54, 62, 58] as RGB,
+  muted: [112, 119, 114] as RGB,
+  line: [229, 225, 215] as RGB,
+  white: [255, 255, 255] as RGB,
+  danger: [176, 48, 40] as RGB,
+  dangerBg: [253, 240, 238] as RGB,
+  warn: [172, 122, 24] as RGB,
+  warnBg: [253, 247, 232] as RGB,
+  ok: [36, 120, 64] as RGB,
+  okBg: [235, 246, 239] as RGB,
+  blue: [33, 92, 158] as RGB,
+  blueBg: [238, 243, 252] as RGB,
 };
 
+function severityColor(score: number): { fg: RGB; bg: RGB } {
+  if (score <= 3) return { fg: C.ok, bg: C.okBg };
+  if (score <= 6) return { fg: C.warn, bg: C.warnBg };
+  return { fg: C.danger, bg: C.dangerBg };
+}
+
+/* ---------- text sanitation for built-in Helvetica (WinAnsi) ---------- */
 function sanitize(text: string): string {
   return text
     .replace(/[\u{1F600}-\u{1F64F}]/gu, "")
@@ -49,908 +68,1646 @@ function sanitize(text: string): string {
     .trim();
 }
 
-const PAGE_H = 285;
+/* ---------- page geometry ---------- */
 const MARGIN_L = 18;
 const MARGIN_R = 192;
-const CONTENT_W = MARGIN_R - MARGIN_L;
+const CONTENT_W = MARGIN_R - MARGIN_L; // 174
+const BOTTOM = 272; // content must end above the footer band
 
-function checkPage(doc: jsPDF, y: number, needed: number = 30): number {
-  if (y + needed > PAGE_H - 15) {
+/* ---------- per-run state (synchronous generation, so module scope is safe) ---------- */
+interface TocEntry {
+  num: string;
+  title: string;
+  page: number;
+  tocY: number;
+}
+let tocEntries: TocEntry[] = [];
+let tocPageNum = 0;
+
+function checkPage(doc: jsPDF, y: number, needed = 30): number {
+  if (y + needed > BOTTOM) {
     doc.addPage();
+    drawTopBar(doc);
     return 22;
   }
   return y;
 }
 
-function drawCoverPage(doc: jsPDF, report: ReportData) {
-  // Full dark green cover
-  doc.setFillColor(...C.primary);
+function drawTopBar(doc: jsPDF) {
+  doc.setFillColor(...C.paper);
+  doc.rect(0, 0, 210, 13, "F");
+  doc.setFillColor(...C.gold);
+  doc.rect(0, 12.6, 210, 0.6, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.muted);
+  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 8);
+  doc.text("ELIMINATION BLUEPRINT", MARGIN_R, 8, { align: "right" });
+}
+
+/* ---------- typography helpers ---------- */
+function h1(doc: jsPDF, text: string, x: number, y: number, size = 19): void {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(size);
+  doc.setTextColor(...C.forest);
+  doc.text(sanitize(text), x, y);
+}
+
+function bodyText(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  maxW: number,
+  size = 9
+): number {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(size);
+  doc.setTextColor(...C.body);
+  const lines = doc.splitTextToSize(sanitize(text), maxW);
+  doc.text(lines, x, y);
+  return y + lines.length * size * 0.52 + 3;
+}
+
+function label(doc: jsPDF, text: string, x: number, y: number, color: RGB = C.muted, size = 7): void {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(size);
+  doc.setTextColor(...color);
+  doc.text(sanitize(text).toUpperCase(), x, y);
+}
+
+/* Wrap text at the exact size it will be rendered — measuring at one size
+   and drawing at another is the classic jsPDF overflow bug. */
+function wrapLines(
+  doc: jsPDF,
+  text: string,
+  maxW: number,
+  size: number,
+  style: "normal" | "bold" = "normal"
+): string[] {
+  doc.setFont("helvetica", style);
+  doc.setFontSize(size);
+  return doc.splitTextToSize(sanitize(text), maxW);
+}
+
+/* ---------- cards & callouts ---------- */
+interface CardOpts {
+  bg?: RGB;
+  border?: RGB;
+  accent?: RGB;
+  pad?: number;
+  x?: number;
+  w?: number;
+}
+
+function card(doc: jsPDF, y: number, h: number, opts: CardOpts = {}): void {
+  const pad = opts.pad ?? 0;
+  const x = opts.x ?? MARGIN_L + pad;
+  const w = opts.w ?? CONTENT_W - pad * 2;
+  doc.setFillColor(...(opts.bg || C.white));
+  if (opts.border) {
+    doc.setDrawColor(...opts.border);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(x, y, w, h, 3, 3, "FD");
+  } else {
+    doc.setDrawColor(...C.line);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(x, y, w, h, 3, 3, "FD");
+  }
+  if (opts.accent) {
+    doc.setFillColor(...opts.accent);
+    doc.roundedRect(x, y, 3.5, h, 1.2, 1.2, "F");
+  }
+}
+
+function measureCardH(doc: jsPDF, titleSize: number, lines: string[], lineH: number, topPad = 6, gap = 5): number {
+  void titleSize;
+  return topPad + gap + lines.length * lineH + 4;
+}
+
+function infoCard(
+  doc: jsPDF,
+  y: number,
+  kicker: string,
+  kickerColor: RGB,
+  body: string,
+  accent: RGB
+): number {
+  const lines = wrapLines(doc, body, CONTENT_W - 18, 8.6);
+  const h = measureCardH(doc, 7, lines, 4.4);
+  y = checkPage(doc, y, h + 4);
+  card(doc, y, h, { accent, border: C.line });
+  label(doc, kicker, MARGIN_L + 9, y + 6.5, kickerColor, 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.6);
+  doc.setTextColor(...C.body);
+  doc.text(lines, MARGIN_L + 9, y + 12);
+  return y + h + 4;
+}
+
+function factCallout(doc: jsPDF, y: number, fact: string, source: string): number {
+  const lines = wrapLines(doc, fact, CONTENT_W - 18, 8.6);
+  const h = lines.length * 4.3 + 14;
+  y = checkPage(doc, y, h + 4);
+  card(doc, y, h, { bg: C.blueBg, border: C.blue, accent: C.blue });
+  label(doc, "Verified fact", MARGIN_L + 9, y + 6.5, C.blue, 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.6);
+  doc.setTextColor(...C.body);
+  doc.text(lines, MARGIN_L + 9, y + 11.5);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(6.8);
+  doc.setTextColor(...C.muted);
+  doc.text(`Source: ${sanitize(source)}`, MARGIN_R - 6, y + h - 3.5, { align: "right" });
+  return y + h + 5;
+}
+
+function checkbox(doc: jsPDF, x: number, y: number, size = 3.4): void {
+  doc.setDrawColor(...C.muted);
+  doc.setLineWidth(0.35);
+  doc.roundedRect(x, y - size + 1, size, size, 0.8, 0.8, "D");
+}
+
+function addLink(doc: jsPDF, text: string, url: string, x: number, y: number, size = 8): void {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(size);
+  doc.setTextColor(...C.blue);
+  doc.text(sanitize(text), x, y);
+  const tw = doc.getTextWidth(sanitize(text));
+  doc.setDrawColor(...C.blue);
+  doc.setLineWidth(0.2);
+  doc.line(x, y + 1, x + tw, y + 1);
+  doc.link(x, y - 3.5, tw, 6, { url });
+}
+
+/* ---------- section header (records TOC entry) ---------- */
+function sectionHeader(doc: jsPDF, num: string, title: string, y: number): number {
+  y = checkPage(doc, y, 22);
+  const h = 11;
+  doc.setFillColor(...C.forest);
+  doc.roundedRect(MARGIN_L, y, CONTENT_W, h, 2.5, 2.5, "F");
+  doc.setFillColor(...C.gold);
+  doc.roundedRect(MARGIN_L, y, 4, h, 1.2, 1.2, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...C.gold);
+  doc.text(num, MARGIN_L + 8, y + 7.4);
+  const numW = doc.getTextWidth(num);
+  doc.setTextColor(...C.white);
+  doc.text(sanitize(title).toUpperCase(), MARGIN_L + 8 + numW + 4, y + 7.4);
+  tocEntries.push({ num, title: sanitize(title), page: doc.getNumberOfPages(), tocY: 0 });
+  return y + h + 6;
+}
+
+/* ---------- quiz answer labels for the diagnostic snapshot ---------- */
+function answerLabels(answers: QuizAnswers | undefined): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const step of quizSteps) {
+    for (const opt of step.options || []) {
+      map.set(`${step.id}:${opt.id}`, opt.label);
+    }
+  }
+  void answers;
+  return map;
+}
+
+function lookupLabels(answers: QuizAnswers, stepId: string, labels: Map<string, string>): string[] {
+  const raw = answers[stepId];
+  if (!raw) return [];
+  const ids = Array.isArray(raw) ? raw : [raw];
+  return ids
+    .map((id) => (stepId === "zip" ? String(id) : labels.get(`${stepId}:${id}`) || String(id)))
+    .filter(Boolean);
+}
+
+/* ============================================================================
+   COVER
+   ============================================================================ */
+function drawCover(doc: jsPDF, report: ReportData): void {
+  doc.setFillColor(...C.forestDeep);
   doc.rect(0, 0, 210, 297, "F");
 
-  // Subtle diagonal pattern overlay
-  doc.setDrawColor(255, 255, 255);
-  doc.setLineWidth(0.1);
-  for (let i = -20; i < 40; i++) {
-    doc.line(i * 12, 0, i * 12 + 297, 297);
-  }
-
-  // Gold accent band
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 0, 210, 4, "F");
-
-  // Brand name
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.text("MICEGONEGUIDE.COM", 105, 40, { align: "center" });
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(180, 210, 190);
-  doc.text("Professional Rodent Elimination Intelligence", 105, 47, { align: "center" });
-
-  // Decorative line
+  // Double gold frame
   doc.setDrawColor(...C.gold);
-  doc.setLineWidth(0.8);
-  doc.line(60, 55, 150, 55);
+  doc.setLineWidth(0.9);
+  doc.rect(11, 11, 188, 275, "D");
+  doc.setDrawColor(...C.goldDeep);
+  doc.setLineWidth(0.3);
+  doc.rect(14.5, 14.5, 181, 268, "D");
 
-  // Main title
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(32);
+  // Eyebrow
   doc.setFont("helvetica", "bold");
-  doc.text("MOUSE ELIMINATION", 105, 90, { align: "center" });
-  doc.text("BLUEPRINT", 105, 105, { align: "center" });
-
-  // Subtitle
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(170, 200, 180);
-  doc.text("Premium Diagnostic Report, Safety Plan & Action Workbook", 105, 120, { align: "center" });
-
-  // Severity badge — large centered
-  const badgeColor = report.severity <= 3 ? C.green : report.severity <= 6 ? C.yellow : C.red;
-  doc.setFillColor(...badgeColor);
-  doc.roundedRect(55, 140, 100, 22, 11, 11, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text(`SEVERITY: ${report.severity}/10`, 105, 150, { align: "center" });
   doc.setFontSize(9);
-  doc.text(sanitize(report.severityLabel).toUpperCase(), 105, 157, { align: "center" });
+  doc.setTextColor(...C.gold);
+  doc.text("M I C E G O N E G U I D E . C O M", 105, 38, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(168, 196, 178);
+  doc.text("Professional Rodent Elimination Intelligence", 105, 45, { align: "center" });
 
-  // Key metrics cards
-  const metrics = [
-    { label: "SPECIES", value: sanitize(report.species.name) },
-    { label: "POPULATION EST.", value: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max} mice` },
-    { label: "ACT WITHIN", value: `${report.urgencyDays} days` },
-    { label: "30-DAY PROJECTION", value: `${report.populationIn30Days.min}-${report.populationIn30Days.max} mice` },
+  // Title block
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(34);
+  doc.setTextColor(...C.white);
+  doc.text("MOUSE ELIMINATION", 105, 92, { align: "center" });
+  doc.setTextColor(...C.gold);
+  doc.text("BLUEPRINT", 105, 110, { align: "center" });
+
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(1);
+  doc.line(78, 120, 132, 120);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(190, 210, 195);
+  doc.text("Your personalized diagnostic report,", 105, 132, { align: "center" });
+  doc.text("safety plan & action workbook", 105, 139, { align: "center" });
+
+  // Severity badge
+  const sc = severityColor(report.severity);
+  const badgeW = 104;
+  doc.setFillColor(...sc.fg);
+  doc.roundedRect(105 - badgeW / 2, 150, badgeW, 20, 10, 10, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(...C.white);
+  doc.text(
+    `SEVERITY ${report.severity}/10  -  ${sanitize(report.severityLabel).toUpperCase()}`,
+    105,
+    162.5,
+    { align: "center" }
+  );
+
+  // Stat panel
+  const px = 33;
+  const py = 180;
+  const pw = 144;
+  const ph = 56;
+  doc.setFillColor(24, 58, 37);
+  doc.setDrawColor(...C.goldDeep);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(px, py, pw, ph, 4, 4, "FD");
+
+  const stats = [
+    { k: "LIKELY SPECIES", v: sanitize(report.species.name) },
+    { k: "EST. POPULATION", v: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max} mice` },
+    { k: "ACT WITHIN", v: `${report.urgencyDays} days` },
+    { k: "30-DAY PROJECTION", v: `${report.populationIn30Days.min}-${report.populationIn30Days.max} mice` },
   ];
-
-  let my = 178;
-  doc.setFillColor(30, 65, 42);
-  doc.roundedRect(30, my, 150, 60, 5, 5, "F");
-
-  metrics.forEach((m, i) => {
-    const row = Math.floor(i / 2);
+  stats.forEach((s, i) => {
     const col = i % 2;
-    const mx = 40 + col * 72;
-    const mmy = my + 12 + row * 26;
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(150, 185, 165);
-    doc.text(m.label, mx, mmy);
-    doc.setFontSize(12);
+    const row = Math.floor(i / 2);
+    const sx = px + 10 + col * 70;
+    const sy = py + 13 + row * 25;
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(255, 255, 255);
-    doc.text(m.value, mx, mmy + 8);
+    doc.setFontSize(6.5);
+    doc.setTextColor(150, 182, 162);
+    doc.text(s.k, sx, sy);
+    doc.setFontSize(11.5);
+    doc.setTextColor(...C.white);
+    doc.text(s.v, sx, sy + 8);
   });
 
-  // Trust ribbon — fact-checked credentials
+  // Trust ribbons
   const ribbons = ["FACT-CHECKED", "CDC-ALIGNED", "EXPERT-REVIEWED"];
-  let rx0 = 105 - (ribbons.length * 44) / 2;
+  const rw = 42;
+  const gap = 5;
+  const totalW = ribbons.length * rw + (ribbons.length - 1) * gap;
+  let rx = 105 - totalW / 2;
   ribbons.forEach((r) => {
     doc.setDrawColor(...C.gold);
     doc.setLineWidth(0.5);
-    doc.roundedRect(rx0, 246, 40, 8, 4, 4, "D");
-    doc.setFontSize(6.5);
+    doc.roundedRect(rx, 246, rw, 9, 4.5, 4.5, "D");
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
     doc.setTextColor(...C.gold);
-    doc.text(r, rx0 + 20, 251, { align: "center" });
-    rx0 += 44;
+    doc.text(r, rx + rw / 2, 252, { align: "center" });
+    rx += rw + gap;
   });
 
-  // Date
-  const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-  doc.setFontSize(8);
+  // Date + disclaimer
+  const dateStr = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(130, 165, 145);
-  doc.text(`Report generated: ${dateStr}`, 105, 263, { align: "center" });
-
-  // Disclaimer
+  doc.setFontSize(8);
+  doc.setTextColor(140, 170, 150);
+  doc.text(`Report generated: ${dateStr}`, 105, 264, { align: "center" });
   doc.setFontSize(6.5);
-  doc.setTextColor(100, 135, 115);
-  doc.text("This report is for informational purposes. For severe infestations, consult a licensed professional.", 105, 270, { align: "center" });
+  doc.setTextColor(105, 138, 118);
+  doc.text(
+    "For informational purposes. For severe infestations, consult a licensed professional.",
+    105,
+    271,
+    { align: "center" }
+  );
 
-  // Bottom gold bar
   doc.setFillColor(...C.gold);
   doc.rect(0, 293, 210, 4, "F");
 }
 
-// Premium page header (reusable)
-function pageTopBar(doc: jsPDF) {
-  doc.setFillColor(...C.light);
-  doc.rect(0, 0, 210, 12, "F");
-  doc.setFillColor(...C.gold);
-  doc.rect(0, 11.5, 210, 0.5, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 7);
-  doc.text("DIAGNOSTIC REPORT", MARGIN_R, 7, { align: "right" });
-}
+/* ============================================================================
+   EXECUTIVE SUMMARY (page 2)
+   ============================================================================ */
+function drawExecutiveSummary(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 22;
 
-// Cited "Verified Fact" callout — elevates credibility
-function factCallout(doc: jsPDF, y: number, fact: string, source: string): number {
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  const lines = doc.splitTextToSize(sanitize(fact), CONTENT_W - 14);
-  const h = lines.length * 4 + 13;
-  y = checkPage(doc, y, h + 4);
-  doc.setFillColor(238, 244, 255);
-  doc.setDrawColor(...C.blue);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(MARGIN_L, y, CONTENT_W, h, 3, 3, "FD");
-  doc.setFillColor(...C.blue);
-  doc.roundedRect(MARGIN_L, y, 3.5, h, 1, 1, "F");
-  doc.setFontSize(6.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.blue);
-  doc.text("VERIFIED FACT", MARGIN_L + 8, y + 5.5);
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.text);
-  doc.text(lines, MARGIN_L + 8, y + 10);
-  doc.setFontSize(6);
-  doc.setFont("helvetica", "italic");
-  doc.setTextColor(...C.muted);
-  doc.text(`Source: ${sanitize(source)}`, MARGIN_R - 4, y + h - 3, { align: "right" });
-  return y + h + 4;
-}
-
-// Executive summary + table of contents page
-function drawExecutiveSummary(doc: jsPDF, report: ReportData) {
-  pageTopBar(doc);
-  let y = 20;
-
-  // Title
-  doc.setFontSize(20);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.primary);
-  doc.text("Executive Summary", MARGIN_L, y);
+  h1(doc, "Executive Summary", MARGIN_L, y);
   doc.setDrawColor(...C.gold);
-  doc.setLineWidth(0.8);
-  doc.line(MARGIN_L, y + 3, MARGIN_L + 55, y + 3);
-  y += 12;
+  doc.setLineWidth(1);
+  doc.line(MARGIN_L, y + 3.5, MARGIN_L + 58, y + 3.5);
+  y += 13;
 
-  // Intro line
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.text);
-  const intro = `Based on your diagnostic responses, our analysis engine has identified a ${sanitize(report.severityLabel).toLowerCase()} infestation involving the ${sanitize(report.species.name)}. This report outlines the verified evidence, projected risk, and a prioritized action plan to resolve your situation.`;
-  const introLines = doc.splitTextToSize(intro, CONTENT_W);
-  doc.text(introLines, MARGIN_L, y);
-  y += introLines.length * 4.4 + 6;
+  y = bodyText(
+    doc,
+    `Based on your diagnostic answers, our analysis identified a ${sanitize(report.severityLabel).toLowerCase()} situation involving the ${sanitize(report.species.name)}. This blueprint turns that diagnosis into a practical plan: what to do tonight, how to seal entry points this week, and how to prove the problem is gone within 30 days.`,
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    9.2
+  );
+  y += 3;
 
-  // Three key-insight stat tiles
+  // Three stat tiles
+  const sc = severityColor(report.severity);
   const tiles = [
-    { label: "SEVERITY SCORE", value: `${report.severity}/10`, sub: sanitize(report.severityLabel) },
-    { label: "CURRENT MICE", value: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max}`, sub: "estimated now" },
-    { label: "IN 30 DAYS", value: `${report.populationIn30Days.min}-${report.populationIn30Days.max}`, sub: "if no action" },
+    { k: "SEVERITY SCORE", v: `${report.severity}/10`, s: sanitize(report.severityLabel), c: sc.fg },
+    { k: "MICE NOW (EST.)", v: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max}`, s: "in your home", c: C.forest },
+    { k: "IN 30 DAYS", v: `${report.populationIn30Days.min}-${report.populationIn30Days.max}`, s: "if no action", c: C.danger },
   ];
   const tw = (CONTENT_W - 8) / 3;
   tiles.forEach((t, i) => {
     const tx = MARGIN_L + i * (tw + 4);
-    doc.setFillColor(...C.primary);
-    doc.roundedRect(tx, y, tw, 26, 3, 3, "F");
+    doc.setFillColor(...t.c);
+    doc.roundedRect(tx, y, tw, 30, 3, 3, "F");
     doc.setFillColor(...C.gold);
-    doc.roundedRect(tx, y, tw, 1.5, 0.5, 0.5, "F");
-    doc.setFontSize(6.5);
+    doc.rect(tx + 6, y + 5, tw - 12, 1, "F");
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(150, 185, 165);
-    doc.text(t.label, tx + tw / 2, y + 7, { align: "center" });
-    doc.setFontSize(17);
-    doc.setTextColor(255, 255, 255);
-    doc.text(t.value, tx + tw / 2, y + 16, { align: "center" });
     doc.setFontSize(6.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text(t.k, tx + tw / 2, y + 11.5, { align: "center" });
+    doc.setFontSize(18);
+    doc.text(t.v, tx + tw / 2, y + 21.5, { align: "center" });
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(180, 205, 190);
-    doc.text(t.sub, tx + tw / 2, y + 22, { align: "center" });
+    doc.setFontSize(7);
+    doc.text(t.s, tx + tw / 2, y + 27, { align: "center" });
   });
-  y += 34;
+  y += 38;
 
-  // Opening verified fact
   y = factCallout(
     doc,
     y,
-    "A single pair of mice can produce up to 150 offspring in a single year, and a female mouse can have a new litter every three weeks. Early intervention is the single biggest factor in successful elimination.",
+    "A single pair of mice can produce up to 150 offspring in a single year, and a female can have a new litter every three weeks. Acting within days -- not weeks -- is the single biggest factor in successful elimination.",
     "U.S. CDC & National Pest Management Association"
   );
 
-  // Table of contents
-  doc.setFontSize(13);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.primary);
-  doc.text("What's Inside This Report", MARGIN_L, y + 4);
-  y += 10;
-
-  const toc = [
-    "01  Infestation Severity Analysis",
-    "02  Rodent Species Identification",
-    "03  Health Risk Assessment",
-    "04  Probable Entry Points",
-    "05  3 Things To Do Tonight",
-    "06  Expert Resources & Next Steps",
+  // How to use this report
+  y = checkPage(doc, y, 40);
+  h1(doc, "How to use this blueprint", MARGIN_L, y, 12);
+  y += 8;
+  const steps = [
+    ["Tonight", "Work through Section 05: secure food, place traps on travel routes, wet-clean contamination."],
+    ["This week", "Audit and seal entry points (Section 04 + Workbook W3). Keep trap pressure on."],
+    ["30 days", "Follow the elimination map (Workbook W4) and log evidence until you hit the success criteria."],
   ];
-  toc.forEach((item) => {
+  steps.forEach(([t, d], i) => {
+    y = checkPage(doc, y, 14);
     doc.setFillColor(...C.gold);
-    doc.circle(MARGIN_L + 2, y - 1, 1.1, "F");
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.text);
-    doc.text(item, MARGIN_L + 7, y);
-    doc.setDrawColor(...C.divider);
-    doc.setLineWidth(0.15);
-    doc.line(MARGIN_L + 7, y + 2, MARGIN_R, y + 2);
-    y += 8;
-  });
-}
-
-function sectionHeader(doc: jsPDF, y: number, title: string, number: string): number {
-  y = checkPage(doc, y, 20);
-  // Gold left accent bar + dark header
-  doc.setFillColor(...C.primary);
-  doc.roundedRect(MARGIN_L, y, CONTENT_W, 11, 2, 2, "F");
-  doc.setFillColor(...C.gold);
-  doc.roundedRect(MARGIN_L, y, 4, 11, 1, 1, "F");
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.text(`${number}  ${sanitize(title)}`, MARGIN_L + 8, y + 7.5);
-  return y + 16;
-}
-
-function textBlock(doc: jsPDF, text: string, x: number, y: number, maxW: number, fontSize: number = 8.5): number {
-  doc.setFontSize(fontSize);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.text);
-  const lines = doc.splitTextToSize(sanitize(text), maxW);
-  doc.text(lines, x, y);
-  return y + lines.length * (fontSize * 0.48) + 3;
-}
-
-function card(doc: jsPDF, y: number, height: number, opts?: { border?: [number, number, number]; bg?: [number, number, number] }): void {
-  doc.setFillColor(...(opts?.bg || C.cardBg));
-  if (opts?.border) {
-    doc.setDrawColor(...opts.border);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(MARGIN_L, y, CONTENT_W, height, 3, 3, "FD");
-    // Left accent
-    doc.setFillColor(...opts.border);
-    doc.roundedRect(MARGIN_L, y, 3.5, height, 1, 1, "F");
-  } else {
-    doc.setDrawColor(...C.divider);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(MARGIN_L, y, CONTENT_W, height, 3, 3, "FD");
-  }
-}
-
-function drawSeverityBarPremium(doc: jsPDF, x: number, y: number, width: number, score: number) {
-  const segW = (width - 18) / 10;
-  for (let i = 0; i < 10; i++) {
-    const color = i < 3 ? C.green : i < 7 ? C.yellow : C.red;
-    if (i < score) {
-      doc.setFillColor(...color);
-    } else {
-      doc.setFillColor(235, 233, 228);
-    }
-    const sx = x + i * (segW + 2);
-    doc.roundedRect(sx, y, segW, 10, 2, 2, "F");
-
-    // Number inside each segment
-    doc.setFontSize(6);
+    doc.circle(MARGIN_L + 4, y + 1, 3.2, "F");
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(i < score ? 255 : 180, i < score ? 255 : 180, i < score ? 255 : 178);
-    doc.text(String(i + 1), sx + segW / 2, y + 6.5, { align: "center" });
-  }
-  // Labels
-  doc.setFontSize(6.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.green);
-  doc.text("LOW", x, y + 16);
-  doc.setTextColor(...C.yellow);
-  doc.text("MODERATE", x + width / 2, y + 16, { align: "center" });
-  doc.setTextColor(...C.red);
-  doc.text("SEVERE", x + width, y + 16, { align: "right" });
-}
-
-function addLink(doc: jsPDF, text: string, url: string, x: number, y: number, fontSize: number = 8) {
-  doc.setFontSize(fontSize);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.blue);
-  doc.text(text, x, y);
-  const tw = doc.getTextWidth(text);
-  doc.setDrawColor(...C.blue);
-  doc.setLineWidth(0.15);
-  doc.line(x, y + 0.5, x + tw, y + 0.5);
-  doc.link(x, y - 3, tw, 5, { url });
-}
-
-
-function premiumBlueprintCard(doc: jsPDF, y: number, title: string, body: string, accent: [number, number, number] = C.primary): number {
-  const bodyLines = doc.splitTextToSize(sanitize(body), CONTENT_W - 16);
-  const h = Math.max(20, bodyLines.length * 4.2 + 13);
-  y = checkPage(doc, y, h + 4);
-  doc.setFillColor(...C.cardBg);
-  doc.setDrawColor(...accent);
-  doc.setLineWidth(0.45);
-  doc.roundedRect(MARGIN_L, y, CONTENT_W, h, 3, 3, "FD");
-  doc.setFillColor(...accent);
-  doc.roundedRect(MARGIN_L, y, 4, h, 1, 1, "F");
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...accent);
-  doc.text(sanitize(title).toUpperCase(), MARGIN_L + 9, y + 6);
-  doc.setFontSize(8.3);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.text);
-  doc.text(bodyLines, MARGIN_L + 9, y + 12);
-  return y + h + 4;
-}
-
-function workbookLines(doc: jsPDF, y: number, label: string, lines: number = 4): number {
-  y = checkPage(doc, y, lines * 8 + 12);
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.primary);
-  doc.text(sanitize(label), MARGIN_L, y);
-  y += 7;
-  doc.setDrawColor(...C.divider);
-  doc.setLineWidth(0.25);
-  for (let i = 0; i < lines; i++) {
-    doc.line(MARGIN_L, y, MARGIN_R, y);
-    y += 8;
-  }
-  return y + 2;
-}
-
-function drawPremiumBlueprintWorkbook(doc: jsPDF, report: ReportData) {
-  doc.addPage();
-  pageTopBar(doc);
-  let y = 20;
-  y = sectionHeader(doc, y, "PREMIUM ELIMINATION BLUEPRINT", "B1");
-  y = textBlock(doc, `This blueprint converts your diagnosis into a practical homeowner operating plan. Start with containment tonight, then move through sealing, trapping, cleanup, and prevention in the right order for a ${sanitize(report.severityLabel).toLowerCase()} ${sanitize(report.species.name)} situation.`, MARGIN_L, y, CONTENT_W, 9);
-  y += 3;
-  y = premiumBlueprintCard(doc, y, "Tonight's containment objective", "Reduce food access, block movement into clean zones, identify the top 2 likely entry routes, and place traps where mice already travel. Do not begin deep cleanup until active droppings/urine areas are wetted with disinfectant first.", C.gold);
-  y = premiumBlueprintCard(doc, y, "Severity-based focus", `Your score is ${report.severity}/10. If activity is spreading across rooms, prioritize containment and sealing before cosmetic cleaning. If sightings are daytime or droppings are fresh daily, escalate faster and consider a licensed professional.`, report.severity >= 7 ? C.red : C.primary);
-  y = premiumBlueprintCard(doc, y, "Species-specific clue", `${sanitize(report.species.name)} behavior: ${sanitize(report.species.behavior)} Use this to place traps along actual routes instead of guessing in open floor space.`, C.green);
-
-  doc.addPage();
-  pageTopBar(doc);
-  y = 20;
-  y = sectionHeader(doc, y, "DECISION FILTER: WHAT TO DO FIRST", "B2");
-  const filters = [
-    ["Safety", "Are there droppings/urine/nesting materials? Wet-clean only; never dry sweep or vacuum contaminated debris."],
-    ["Food pressure", "What food, pet food, crumbs, trash, bird seed, or pantry item is rewarding the route? Remove rewards before adding traps."],
-    ["Travel route", "Where do walls, cabinets, appliances, pipes, or baseboards create a runway? Place traps perpendicular to those routes."],
-    ["Entry point", "What gap can be sealed today with steel wool/copper mesh + sealant? Prioritize holes near utilities, doors, garages, and foundations."],
-    ["Proof", "What will you track tomorrow morning: trap activity, fresh droppings, new sounds, food disturbance, or camera footage?"],
-  ];
-  filters.forEach(([title, body]) => { y = premiumBlueprintCard(doc, y, title, body, title === "Safety" ? C.red : C.primary); });
-
-  doc.addPage();
-  pageTopBar(doc);
-  y = 20;
-  y = sectionHeader(doc, y, "ENTRY-POINT AUDIT WORKSHEET", "B3");
-  y = textBlock(doc, "Walk the exterior and interior slowly. Mice can use extremely small gaps, especially around pipes, utility lines, garage weatherstripping, doors, vents, sill plates, and foundation cracks.", MARGIN_L, y, CONTENT_W, 9);
-  ["Kitchen / pantry / appliances", "Garage / basement / utility lines", "Exterior foundation / siding / vents", "Attic / roofline / soffits", "Doors / weatherstripping / thresholds"].forEach((area) => {
-    y = workbookLines(doc, y, `${area}: evidence + seal plan`, 3);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...C.white);
+    doc.text(String(i + 1), MARGIN_L + 4, y + 2.6, { align: "center" });
+    doc.setFontSize(9);
+    doc.setTextColor(...C.ink);
+    doc.text(sanitize(t), MARGIN_L + 12, y + 1.5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.6);
+    doc.setTextColor(...C.body);
+    const dl = doc.splitTextToSize(sanitize(d), CONTENT_W - 16);
+    doc.text(dl, MARGIN_L + 12, y + 6.5);
+    y += dl.length * 4.5 + 5;
   });
-
-  doc.addPage();
-  pageTopBar(doc);
-  y = 20;
-  y = sectionHeader(doc, y, "30-DAY ELIMINATION MAP", "B4");
-  const weeks = [
-    ["Days 1-3: Contain", "Remove food rewards, isolate contaminated zones, place traps on travel routes, document fresh activity, and wet-clean only after disinfectant contact time."],
-    ["Days 4-10: Seal", "Close confirmed gaps with rodent-resistant materials. Recheck utilities, doors, garage edges, exterior pipes, and cabinet penetrations."],
-    ["Days 11-20: Deplete", "Maintain trap pressure, move traps only when evidence shifts, and monitor whether droppings/sounds decrease."],
-    ["Days 21-30: Prove prevention", "Confirm no fresh droppings, smells, food disturbance, or sounds. Reset sanitation routines and monthly exterior checks."],
-  ];
-  weeks.forEach(([title, body]) => { y = premiumBlueprintCard(doc, y, title, body, title.includes("1-3") ? C.gold : C.primary); });
-  y = workbookLines(doc, y, "My top 3 actions this week", 5);
-
-  doc.addPage();
-  pageTopBar(doc);
-  y = 20;
-  y = sectionHeader(doc, y, "PRINTABLE TRACKING LOG", "B5");
-  y = textBlock(doc, "Track evidence daily. The goal is not just fewer sightings -- it is no new droppings, no fresh sounds, no food disturbance, and no trap activity over time.", MARGIN_L, y, CONTENT_W, 9);
-  ["Day / room / evidence found", "Trap placement + result", "Food or attractant removed", "Gap found or sealed", "Next adjustment"].forEach((label) => { y = workbookLines(doc, y, label, 3); });
 }
 
-export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-  // ===== PAGE 1: COVER =====
-  drawCoverPage(doc, report);
-
-  // ===== PAGE 2: EXECUTIVE SUMMARY & CONTENTS =====
-  doc.addPage();
-  drawExecutiveSummary(doc, report);
-
-  // ===== PAGE 3: SEVERITY & SPECIES =====
-  doc.addPage();
-  let y = 18;
-  pageTopBar(doc);
-
-  // SECTION 1: SEVERITY
-  y = sectionHeader(doc, y, "INFESTATION SEVERITY ANALYSIS", "01");
-  drawSeverityBarPremium(doc, MARGIN_L + 5, y, CONTENT_W - 10, report.severity);
-  y += 22;
-
-  y = textBlock(doc, report.severityDescription, MARGIN_L + 2, y, CONTENT_W - 4, 9);
-  y += 2;
-
-  // Population estimate cards (side by side)
-  const cardW = (CONTENT_W - 4) / 2;
-  y = checkPage(doc, y, 26);
-
-  // Current population card
-  doc.setFillColor(...C.greenBg);
-  doc.setDrawColor(...C.green);
-  doc.setLineWidth(0.3);
-  doc.roundedRect(MARGIN_L, y, cardW, 22, 3, 3, "FD");
-  doc.setFillColor(...C.green);
-  doc.roundedRect(MARGIN_L, y, 3.5, 22, 1, 1, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.green);
-  doc.text("ESTIMATED CURRENT POPULATION", MARGIN_L + 8, y + 6);
-  doc.setFontSize(16);
-  doc.setTextColor(...C.dark);
-  doc.text(`${report.estimatedPopulation.min}-${report.estimatedPopulation.max}`, MARGIN_L + 8, y + 16);
-  doc.setFontSize(8);
+/* ============================================================================
+   DIAGNOSTIC SNAPSHOT + TABLE OF CONTENTS (page 3)
+   ============================================================================ */
+function pill(doc: jsPDF, x: number, y: number, text: string, maxX: number): number {
+  const t = sanitize(text);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.muted);
-  doc.text("mice", MARGIN_L + 42, y + 16);
+  doc.setFontSize(7.6);
+  const w = Math.min(doc.getTextWidth(t) + 7, maxX - x);
+  if (w < 12) return 0;
+  doc.setFillColor(...C.goldSoft);
+  doc.setDrawColor(...C.goldDeep);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(x, y - 5, w, 7, 3.5, 3.5, "FD");
+  doc.setTextColor(...C.body);
+  let shown = t;
+  // epsilon guards float rounding in getTextWidth so full-width pills don't
+  // lose their last characters to a phantom overflow
+  while (doc.getTextWidth(shown) > w - 7 + 0.75 && shown.length > 4) shown = shown.slice(0, -2);
+  doc.text(shown, x + 3.5, y);
+  return w + 3;
+}
 
-  // 30-day projection card
-  const rx = MARGIN_L + cardW + 4;
-  doc.setFillColor(...C.redBg);
-  doc.setDrawColor(...C.red);
-  doc.roundedRect(rx, y, cardW, 22, 3, 3, "FD");
-  doc.setFillColor(...C.red);
-  doc.roundedRect(rx, y, 3.5, 22, 1, 1, "F");
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.red);
-  doc.text("30-DAY PROJECTION (NO ACTION)", rx + 8, y + 6);
-  doc.setFontSize(16);
-  doc.setTextColor(...C.dark);
-  doc.text(`${report.populationIn30Days.min}-${report.populationIn30Days.max}`, rx + 8, y + 16);
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...C.muted);
-  doc.text("mice", rx + 42, y + 16);
+function snapshotRow(
+  doc: jsPDF,
+  y: number,
+  rowLabel: string,
+  items: string[]
+): number {
+  if (items.length === 0) return y;
+  y = checkPage(doc, y, 14);
+  label(doc, rowLabel, MARGIN_L, y, C.forest, 7.5);
+  let x = MARGIN_L + 30;
+  const lineY = y;
+  for (const item of items) {
+    const w = pill(doc, x, lineY, item, MARGIN_R);
+    if (w === 0) {
+      y += 10;
+      y = checkPage(doc, y, 12);
+      x = MARGIN_L + 30;
+      const w2 = pill(doc, x, y, item, MARGIN_R);
+      x += w2;
+    } else {
+      x += w;
+      if (x > MARGIN_R - 20) {
+        y += 10;
+        y = checkPage(doc, y, 12);
+        x = MARGIN_L + 30;
+      }
+    }
+  }
+  return y + 10;
+}
 
-  y += 28;
+function drawSnapshotAndTOC(doc: jsPDF, report: ReportData, answers?: QuizAnswers): void {
+  void report;
+  doc.addPage();
+  drawTopBar(doc);
+  tocPageNum = doc.getNumberOfPages();
+  let y = 22;
 
-  // Urgency callout
-  y = checkPage(doc, y, 16);
-  doc.setFillColor(255, 248, 235);
+  h1(doc, "Your Diagnostic Snapshot", MARGIN_L, y, 13);
   doc.setDrawColor(...C.gold);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(MARGIN_L, y, CONTENT_W, 13, 3, 3, "FD");
-  doc.setFillColor(...C.gold);
-  doc.roundedRect(MARGIN_L, y, 3.5, 13, 1, 1, "F");
-  doc.setFontSize(9);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L, y + 3.5, MARGIN_L + 52, y + 3.5);
+  y += 12;
+
+  if (answers) {
+    const labels = answerLabels(answers);
+    const rows: [string, string[]][] = [
+      ["Signs", lookupLabels(answers, "evidence", labels)],
+      ["Areas", lookupLabels(answers, "location", labels)],
+      [
+        "Home",
+        [
+          ...lookupLabels(answers, "home_type", labels),
+          ...lookupLabels(answers, "home_age", labels),
+          ...lookupLabels(answers, "surroundings", labels),
+        ],
+      ],
+      [
+        "Timeline",
+        [...lookupLabels(answers, "timeline", labels), ...lookupLabels(answers, "season", labels)],
+      ],
+      [
+        "Household",
+        [
+          ...lookupLabels(answers, "household", labels).filter((l) => !/no special/i.test(l)),
+          ...lookupLabels(answers, "food_storage", labels),
+        ],
+      ],
+      [
+        "Tried",
+        [
+          ...lookupLabels(answers, "previous", labels).filter((l) => !/nothing yet/i.test(l)),
+          ...lookupLabels(answers, "previous_results", labels),
+        ],
+      ],
+    ];
+    for (const [rl, items] of rows) {
+      y = snapshotRow(doc, y, rl, items);
+    }
+    y += 2;
+    y = bodyText(
+      doc,
+      "This is what your plan below is built on. If anything here looks wrong, retake the quiz and download a fresh blueprint.",
+      MARGIN_L,
+      y,
+      CONTENT_W,
+      8
+    );
+  } else {
+    y = bodyText(
+      doc,
+      "Your personalized plan follows. Each section builds on your diagnostic answers.",
+      MARGIN_L,
+      y,
+      CONTENT_W,
+      8.6
+    );
+  }
+
+  // Table of contents (page numbers filled in after layout)
+  y += 4;
+  y = checkPage(doc, y, 60);
+  h1(doc, "Contents", MARGIN_L, y, 13);
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L, y + 3.5, MARGIN_L + 30, y + 3.5);
+  y += 12;
+
+  const staticToc: [string, string][] = [
+    ["01", "Infestation Severity Analysis"],
+    ["02", "Rodent Species Identification"],
+    ["03", "Health Risk Assessment"],
+    ["04", "Probable Entry Points"],
+    ["05", "Tonight's Action Plan"],
+    ["06", "Expert Resources"],
+  ];
+  // Reserve rows; real entries are pushed by sectionHeader in order, so we
+  // store the y positions here and match them by index later.
+  const rowYs: number[] = [];
+  for (const [num, title] of staticToc) {
+    y = checkPage(doc, y, 10);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...C.goldDeep);
+    doc.text(num, MARGIN_L + 2, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...C.ink);
+    doc.text(sanitize(title), MARGIN_L + 14, y);
+    rowYs.push(y);
+    y += 9;
+  }
+  // Workbook + pro rows appended dynamically at fill time if space allows;
+  // store base for later.
+  (doc as unknown as { __tocRowYs?: number[] }).__tocRowYs = rowYs;
+  void staticToc;
+}
+
+function fillTOC(doc: jsPDF): void {
+  if (!tocPageNum) return;
+  const rowYs: number[] =
+    (doc as unknown as { __tocRowYs?: number[] }).__tocRowYs || [];
+  doc.setPage(tocPageNum);
+  const n = Math.min(rowYs.length, tocEntries.length);
+  for (let i = 0; i < n; i++) {
+    const e = tocEntries[i];
+    const y = rowYs[i];
+    const titleW = doc.getTextWidth(sanitize(tocEntries[i].title));
+    // dotted leader
+    doc.setDrawColor(...C.line);
+    doc.setLineWidth(0.3);
+    const x0 = MARGIN_L + 14 + titleW + 4;
+    const x1 = MARGIN_R - 12;
+    if (x1 > x0) {
+      for (let x = x0; x < x1; x += 2.4) {
+        doc.circle(x, y - 1, 0.28, "F");
+      }
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...C.forest);
+    doc.text(String(e.page), MARGIN_R, y, { align: "right" });
+  }
+  // Extra rows: pro + workbook sections (compact, two columns if needed)
+  let ey = rowYs.length ? rowYs[rowYs.length - 1] + 14 : 120;
+  const extras = tocEntries.slice(n);
+  if (extras.length > 0) {
+    doc.setPage(tocPageNum);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.muted);
+    doc.text("ALSO INSIDE", MARGIN_L + 2, ey);
+    ey += 7;
+    for (const e of extras) {
+      if (ey > BOTTOM - 6) break;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...C.goldDeep);
+      doc.text(e.num, MARGIN_L + 2, ey);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...C.body);
+      doc.text(sanitize(e.title), MARGIN_L + 14, ey);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...C.forest);
+      doc.text(String(e.page), MARGIN_R, ey, { align: "right" });
+      ey += 8;
+    }
+  }
+}
+
+/* ============================================================================
+   01 — SEVERITY
+   ============================================================================ */
+function drawSeverityBar(doc: jsPDF, y: number, score: number): number {
+  const x = MARGIN_L;
+  const w = CONTENT_W;
+  const segW = (w - 18) / 10;
+  const sc = severityColor(score);
+  for (let i = 0; i < 10; i++) {
+    const c = i < 3 ? C.ok : i < 7 ? C.warn : C.danger;
+    doc.setFillColor(...(i < score ? c : [236, 234, 228] as RGB));
+    const sx = x + i * (segW + 2);
+    doc.roundedRect(sx, y, segW, 11, 2, 2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...(i < score ? C.white : C.muted));
+    doc.text(String(i + 1), sx + segW / 2, y + 7.4, { align: "center" });
+  }
+  // Marker triangle above the user's score
+  const mx = x + (score - 1) * (segW + 2) + segW / 2;
+  doc.setFillColor(...sc.fg);
+  doc.triangle(mx - 3, y - 1.5, mx + 3, y - 1.5, mx, y + 2.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.dark);
-  doc.text(`ACTION RECOMMENDED WITHIN ${report.urgencyDays} DAYS`, MARGIN_L + 8, y + 5.5);
-  doc.setFontSize(7.5);
+  doc.setFontSize(6.8);
+  doc.setTextColor(...sc.fg);
+  doc.text("YOU", mx, y - 3.5, { align: "center" });
+
+  doc.setFontSize(7);
+  doc.setTextColor(...C.ok);
+  doc.text("LOW", x, y + 17.5);
+  doc.setTextColor(...C.warn);
+  doc.text("MODERATE", x + w / 2, y + 17.5, { align: "center" });
+  doc.setTextColor(...C.danger);
+  doc.text("SEVERE", x + w, y + 17.5, { align: "right" });
+  return y + 24;
+}
+
+function drawSeverity(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "01", "Infestation Severity Analysis", y);
+
+  y = checkPage(doc, y, 40);
+  label(doc, "Your score on the 10-point scale", MARGIN_L, y, C.forest, 7.5);
+  y += 8;
+  y = drawSeverityBar(doc, y, report.severity);
+
+  y = bodyText(doc, report.severityDescription, MARGIN_L + 2, y, CONTENT_W - 4, 9.2);
+  y += 4;
+
+  // Population cards
+  const sc = severityColor(report.severity);
+  y = checkPage(doc, y, 30);
+  const cw = (CONTENT_W - 6) / 2;
+  const cards: { k: string; v: string; u: string; fg: RGB; bg: RGB }[] = [
+    { k: "ESTIMATED CURRENT POPULATION", v: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max}`, u: "mice", fg: C.ok, bg: C.okBg },
+    { k: "30-DAY PROJECTION (NO ACTION)", v: `${report.populationIn30Days.min}-${report.populationIn30Days.max}`, u: "mice", fg: C.danger, bg: C.dangerBg },
+  ];
+  cards.forEach((c, i) => {
+    const cx = MARGIN_L + i * (cw + 6);
+    card(doc, y, 24, { bg: c.bg, border: c.fg, accent: c.fg, x: cx, w: cw });
+    label(doc, c.k, cx + 9, y + 6.5, c.fg, 6.8);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.setTextColor(...C.ink);
+    doc.text(c.v, cx + 9, y + 17.5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.muted);
+    doc.text(c.u, cx + 9 + doc.getTextWidth(c.v) + 3, y + 17.5);
+  });
+  y += 30;
+
+  // Urgency banner (consistent with urgencyDays everywhere)
+  y = checkPage(doc, y, 20);
+  const uh = 15;
+  card(doc, y, uh, { bg: C.warnBg, border: C.gold, accent: C.gold });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...C.ink);
+  doc.text(
+    `START WITHIN ${report.urgencyDays} ${report.urgencyDays === 1 ? "DAY" : "DAYS"} -- RECOMMENDED`,
+    MARGIN_L + 9,
+    y + 6.5
+  );
   doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
   doc.setTextColor(...C.muted);
-  doc.text("Mice can reproduce every 19-21 days. Early action prevents exponential growth.", MARGIN_L + 8, y + 10.5);
-  y += 18;
+  doc.text("Mice can reproduce every 19-21 days. Early action prevents exponential growth.", MARGIN_L + 9, y + 11.5);
+  y += uh + 6;
 
   y = factCallout(
     doc,
     y,
-    "Mice are capable of squeezing through openings as small as a quarter-inch (6 mm) — roughly the width of a pencil. This is why sealing entry points is as critical as trapping.",
+    "Mice can squeeze through openings as small as 1/4 inch (6 mm) -- about the width of a pencil. Sealing entry points matters as much as trapping.",
     "U.S. CDC, Integrated Pest Management Guidance"
   );
+}
 
-  // SECTION 2: SPECIES ID
-  y = sectionHeader(doc, y, "RODENT SPECIES IDENTIFICATION", "02");
+/* ============================================================================
+   02 — SPECIES
+   ============================================================================ */
+function drawSpecies(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "02", "Rodent Species Identification", y);
 
-  // Species name card
-  y = checkPage(doc, y, 40);
-  doc.setFillColor(...C.cardBg);
-  doc.setDrawColor(...C.divider);
-  doc.setLineWidth(0.2);
-  doc.roundedRect(MARGIN_L, y, CONTENT_W, 16, 3, 3, "FD");
-  doc.setFillColor(...C.primary);
-  doc.roundedRect(MARGIN_L, y, 3.5, 16, 1, 1, "F");
-
+  y = checkPage(doc, y, 30);
+  card(doc, y, 19, { accent: C.forest });
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(...C.dark);
-  doc.text(sanitize(report.species.name), MARGIN_L + 8, y + 7);
-  doc.setFontSize(8);
+  doc.setTextColor(...C.ink);
+  doc.text(sanitize(report.species.name), MARGIN_L + 9, y + 8);
   doc.setFont("helvetica", "italic");
+  doc.setFontSize(8.5);
   doc.setTextColor(...C.muted);
-  doc.text(sanitize(report.species.scientificName), MARGIN_L + 8, y + 12.5);
-
-  // "Confirmed" badge
-  doc.setFillColor(...C.green);
-  doc.roundedRect(MARGIN_R - 30, y + 3, 28, 7, 3, 3, "F");
-  doc.setFontSize(6);
+  doc.text(sanitize(report.species.scientificName), MARGIN_L + 9, y + 14);
+  // Identified badge
+  const bw = 30;
+  doc.setFillColor(...C.ok);
+  doc.roundedRect(MARGIN_R - bw - 2, y + 6, bw, 7.5, 3.5, 3.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(255, 255, 255);
-  doc.text("IDENTIFIED", MARGIN_R - 16, y + 8, { align: "center" });
+  doc.setFontSize(6.5);
+  doc.setTextColor(...C.white);
+  doc.text("IDENTIFIED", MARGIN_R - bw / 2 - 2, y + 11.2, { align: "center" });
+  y += 24;
 
-  y += 20;
-
-  y = textBlock(doc, report.species.description, MARGIN_L + 2, y, CONTENT_W - 4, 8.5);
+  y = bodyText(doc, report.species.description, MARGIN_L + 2, y, CONTENT_W - 4, 9);
   y += 2;
 
-  // Species detail cards
-  const specDetails = [
-    { label: "BEHAVIORAL PROFILE", value: report.species.behavior },
-    { label: "DIETARY HABITS", value: report.species.diet },
-    { label: "REPRODUCTION RATE", value: report.species.reproductionRate },
+  const details: [string, string, RGB][] = [
+    ["Behavioral profile", report.species.behavior, C.forest],
+    ["Dietary habits", report.species.diet, C.goldDeep],
+    ["Reproduction rate", report.species.reproductionRate, C.danger],
   ];
-  for (const d of specDetails) {
-    y = checkPage(doc, y, 18);
-    const val = sanitize(d.value);
-    const lines = doc.splitTextToSize(val, CONTENT_W - 16);
-    const h = lines.length * 4 + 9;
-    card(doc, y, h, { border: C.primaryLight });
-    doc.setFontSize(6.5);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.primaryLight);
-    doc.text(d.label, MARGIN_L + 8, y + 5.5);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.text);
-    doc.text(lines, MARGIN_L + 8, y + 10);
-    y += h + 3;
+  for (const [k, v, accent] of details) {
+    y = infoCard(doc, y, k, accent, v, accent);
   }
 
-  // ===== HEALTH RISKS & ENTRY POINTS =====
-  doc.addPage();
-  y = 18;
-  pageTopBar(doc);
-
-  // SECTION 3: HEALTH RISKS
-  y = sectionHeader(doc, y, "HEALTH RISK ASSESSMENT", "03");
   y = factCallout(
     doc,
     y,
-    "Mouse droppings, urine, and saliva can transmit Hantavirus, Salmonella, and Lymphocytic choriomeningitis (LCMV). Never sweep or vacuum dry droppings — this aerosolizes pathogens. Always wet-clean with a disinfectant.",
+    "Knowing the species changes trap placement: house mice hug walls near food, roof rats run high along rafters, and Norway rats burrow low near foundations. Place traps on the routes your species actually travels.",
+    "MiceGoneGuide species behavior database"
+  );
+}
+
+/* ============================================================================
+   03 — HEALTH RISKS
+   ============================================================================ */
+function drawHealth(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "03", "Health Risk Assessment", y);
+
+  // CDC safety strip — the single most important safety message
+  y = checkPage(doc, y, 26);
+  const sh = 21;
+  card(doc, y, sh, { bg: C.dangerBg, border: C.danger, accent: C.danger });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9.5);
+  doc.setTextColor(...C.danger);
+  doc.text("NEVER SWEEP OR VACUUM DRY DROPPINGS", MARGIN_L + 9, y + 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.4);
+  doc.setTextColor(...C.body);
+  const sl = wrapLines(
+    doc,
+    "Dry sweeping aerosolizes pathogens. Always wet-clean: ventilate 30 min, wear gloves + mask, soak with disinfectant 5 minutes, wipe with paper towels.",
+    CONTENT_W - 18,
+    8.4
+  );
+  doc.text(sl, MARGIN_L + 9, y + 12.5);
+  y += sh + 6;
+
+  for (const risk of report.healthRisks) {
+    const clean = sanitize(risk);
+    const isHigh = /HIGH RISK|CRITICAL/i.test(risk);
+    const lines = doc.splitTextToSize(clean, CONTENT_W - 20);
+    const h = lines.length * 4.4 + 8;
+    y = checkPage(doc, y, h + 4);
+    card(doc, y, h, {
+      bg: isHigh ? C.dangerBg : C.white,
+      border: isHigh ? C.danger : C.line,
+      accent: isHigh ? C.danger : C.muted,
+    });
+    if (isHigh) {
+      label(doc, "Priority", MARGIN_L + 9, y + 6, C.danger, 7);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.6);
+      doc.setTextColor(...C.danger);
+      doc.text(lines, MARGIN_L + 9, y + 11.5);
+    } else {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.6);
+      doc.setTextColor(...C.body);
+      doc.text(lines, MARGIN_L + 9, y + 6.5);
+    }
+    y += h + 3.5;
+  }
+
+  y = factCallout(
+    doc,
+    y,
+    "Mouse droppings, urine, and saliva can transmit Hantavirus, Salmonella, and LCMV. Children, pregnant people, and anyone with asthma face higher risk -- keep them out of active cleanup zones.",
     "U.S. CDC, Rodent-Borne Disease Prevention"
   );
-  for (const risk of report.healthRisks) {
-    y = checkPage(doc, y, 14);
-    const clean = sanitize(risk);
-    const isHigh = risk.includes("HIGH RISK") || risk.includes("CRITICAL");
-    const lines = doc.splitTextToSize(clean, CONTENT_W - 18);
-    const h = lines.length * 4 + 6;
-    card(doc, y, h, { border: isHigh ? C.red : undefined, bg: isHigh ? C.redBg : C.cardBg });
-    doc.setFontSize(8);
-    doc.setFont("helvetica", isHigh ? "bold" : "normal");
-    doc.setTextColor(...(isHigh ? C.red : C.text));
-    doc.text(lines, MARGIN_L + 8, y + 5);
-    y += h + 3;
-  }
+}
 
-  // SECTION 4: ENTRY POINTS
-  y += 3;
-  y = sectionHeader(doc, y, "PROBABLE ENTRY POINTS", "04");
-  for (let i = 0; i < report.entryPoints.length; i++) {
-    y = checkPage(doc, y, 10);
-    // Numbered circle
-    doc.setFillColor(...C.gold);
-    doc.circle(MARGIN_L + 5, y + 1, 3, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(7);
-    doc.setFont("helvetica", "bold");
-    doc.text(String(i + 1), MARGIN_L + 5, y + 2.5, { align: "center" });
-
-    doc.setFontSize(8.5);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.text);
-    const epLines = doc.splitTextToSize(sanitize(report.entryPoints[i]), CONTENT_W - 18);
-    doc.text(epLines, MARGIN_L + 14, y + 1.5);
-    y += epLines.length * 4.5 + 4;
-  }
-
-  // ===== IMMEDIATE ACTIONS & RESOURCES =====
+/* ============================================================================
+   04 — ENTRY POINTS
+   ============================================================================ */
+function drawEntryPoints(doc: jsPDF, report: ReportData): void {
   doc.addPage();
-  y = 18;
-  pageTopBar(doc);
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "04", "Probable Entry Points", y);
 
-  // SECTION 5: ACTIONS
-  y = sectionHeader(doc, y, "3 THINGS TO DO TONIGHT", "05");
+  y = bodyText(
+    doc,
+    "Mice follow walls, pipes, and utility lines. Walk these zones slowly with a flashlight, then tick the box once each gap is sealed with copper mesh + elastomeric caulk (never expanding foam alone).",
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    9
+  );
+  y += 2;
 
-  for (let i = 0; i < report.immediateActions.length; i++) {
-    y = checkPage(doc, y, 22);
-    const actionText = sanitize(report.immediateActions[i]);
-    const lines = doc.splitTextToSize(actionText, CONTENT_W - 22);
-    const h = lines.length * 4.2 + 8;
-
-    // Card
-    doc.setFillColor(255, 252, 245);
-    doc.setDrawColor(...C.gold);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(MARGIN_L, y, CONTENT_W, h, 3, 3, "FD");
-
-    // Big number
+  report.entryPoints.forEach((ep, i) => {
+    const lines = wrapLines(doc, ep, CONTENT_W - 26, 8.8);
+    const h = Math.max(11, lines.length * 4.6 + 6);
+    y = checkPage(doc, y, h + 3);
+    card(doc, y, h, {});
+    // number
     doc.setFillColor(...C.gold);
-    doc.roundedRect(MARGIN_L + 3, y + 3, 14, 14, 7, 7, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
+    doc.circle(MARGIN_L + 8, y + h / 2, 4, "F");
     doc.setFont("helvetica", "bold");
-    doc.text(String(i + 1), MARGIN_L + 10, y + 12.5, { align: "center" });
-
-    // Action text
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
+    doc.setTextColor(...C.white);
+    doc.text(String(i + 1), MARGIN_L + 8, y + h / 2 + 1.6, { align: "center" });
+    // text
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C.text);
-    doc.text(lines, MARGIN_L + 22, y + 6);
-    y += h + 4;
-  }
+    doc.setFontSize(8.8);
+    doc.setTextColor(...C.body);
+    doc.text(lines, MARGIN_L + 17, y + h / 2 - (lines.length - 1) * 2.3 + 1.2);
+    // "sealed" checkbox
+    checkbox(doc, MARGIN_R - 9, y + h / 2 + 1, 3.6);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(...C.muted);
+    doc.text("SEALED", MARGIN_R - 9, y + h / 2 - 4.5, { align: "center" });
+    y += h + 3;
+  });
 
-  // SECTION 6: EXPERT RESOURCES
-  y += 4;
-  y = sectionHeader(doc, y, "EXPERT RESOURCES FROM MICEGONEGUIDE", "06");
+  y = infoCard(
+    doc,
+    y,
+    "Sealing standard",
+    C.forest,
+    "Pack every gap 1/4 inch or larger with copper mesh, then seal with elastomeric caulk. One week with zero catches and zero new signs is a monitoring checkpoint -- not proof mice cannot return if gaps stay open.",
+    C.forest
+  );
+}
+
+/* ============================================================================
+   TRAP T-PLACEMENT DIAGRAM (vector schematic, top-down view)
+   ============================================================================ */
+function drawTrapDiagram(doc: jsPDF, y: number): number {
+  const h = 62;
+  y = checkPage(doc, y, h + 6);
+  card(doc, y, h, { bg: C.paper, border: C.line });
+  label(doc, "Trap T-placement -- top-down view", MARGIN_L + 9, y + 7, C.forest, 7.5);
+
+  const dx = MARGIN_L + 14;
+  const dw = 74;
+  const dy = y + 12;
+
+  // Wall band
+  doc.setFillColor(...C.forest);
+  doc.roundedRect(dx, dy, dw, 9, 1.5, 1.5, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6);
+  doc.setTextColor(...C.white);
+  doc.text("WALL / BASEBOARD", dx + dw / 2, dy + 6, { align: "center" });
+
+  // Trap body — perpendicular to the wall, forming a T
+  const tx = dx + dw / 2 - 9;
+  const ty = dy + 9;
+  doc.setFillColor(...C.goldSoft);
+  doc.setDrawColor(...C.goldDeep);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(tx, ty, 18, 26, 2, 2, "FD");
+  // Trigger end (against the wall)
+  doc.setFillColor(...C.gold);
+  doc.roundedRect(tx + 2, ty + 1.5, 14, 7, 1.5, 1.5, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(5.5);
+  doc.setTextColor(...C.ink);
+  doc.text("TRIGGER", tx + 9, ty + 6.2, { align: "center" });
+  // Bait dot
+  doc.setFillColor(...C.danger);
+  doc.circle(tx + 9, ty + 13, 1.6, "F");
+
+  // Travel-route arrows along the wall
+  doc.setDrawColor(...C.emerald);
+  doc.setLineWidth(0.7);
+  const ay = dy + 4.5;
+  doc.line(dx + 4, ay, tx - 6, ay);
+  doc.line(dx + dw - 4, ay, tx + 24, ay);
+  doc.setFillColor(...C.emerald);
+  doc.triangle(tx - 6, ay - 1.8, tx - 6, ay + 1.8, tx - 2.5, ay, "F");
+  doc.triangle(tx + 24, ay - 1.8, tx + 24, ay + 1.8, tx + 20.5, ay, "F");
+
+  // Annotations
+  const ax = dx + dw + 8;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.ink);
+  doc.text("Set traps PERPENDICULAR", ax, dy + 4);
+  doc.text("to the wall -- like a T.", ax, dy + 9);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.8);
+  doc.setTextColor(...C.body);
+  const notes = wrapLines(
+    doc,
+    "Trigger end touches the baseboard. Pea-sized dab of chunky peanut butter on the trigger. Mice travel along edges and walk straight in.",
+    CONTENT_W - (dw + 26),
+    7.8
+  );
+  doc.text(notes, ax, dy + 15);
+  const ny = dy + 15 + notes.length * 4;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.danger);
+  doc.text("Check daily. Keep out of reach of", ax, ny + 3);
+  doc.text("children and pets.", ax, ny + 7.5);
+
+  return y + h + 5;
+}
+
+/* ============================================================================
+   05 — TONIGHT'S ACTION PLAN
+   ============================================================================ */
+function drawActions(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "05", "Tonight's Action Plan", y);
+
+  // CDC safety strip
+  y = checkPage(doc, y, 26);
+  const sh = 22;
+  card(doc, y, sh, { bg: C.dangerBg, border: C.danger, accent: C.danger });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.danger);
+  doc.text("SAFETY FIRST -- CDC WET CLEANUP ONLY", MARGIN_L + 9, y + 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.2);
+  doc.setTextColor(...C.body);
+  const sl = wrapLines(
+    doc,
+    "Air out closed areas 30 min. Wear gloves + mask. Soak droppings 5 min with disinfectant or 1:9 bleach mix, wipe with paper towels into a covered bin.",
+    CONTENT_W - 18,
+    8.2
+  );
+  doc.text(sl, MARGIN_L + 9, y + 12);
+  y += sh + 5;
+
+  y = drawTrapDiagram(doc, y);
+
+  label(doc, "Do these tonight, in order", MARGIN_L, y, C.forest, 7.5);
+  y += 5;
+
+  report.immediateActions.forEach((a, i) => {
+    const lines = wrapLines(doc, a, CONTENT_W - 34, 8.8);
+    const h = lines.length * 4.4 + 10;
+    y = checkPage(doc, y, h + 4);
+    card(doc, y, h, { bg: [255, 253, 247] as RGB, border: C.gold, accent: C.gold });
+    // step number
+    doc.setFillColor(...C.gold);
+    doc.circle(MARGIN_L + 10, y + 9, 6.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(...C.white);
+    doc.text(String(i + 1), MARGIN_L + 10, y + 12.6, { align: "center" });
+    // text
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.8);
+    doc.setTextColor(...C.body);
+    doc.text(lines, MARGIN_L + 22, y + 7.5);
+    // done checkbox
+    checkbox(doc, MARGIN_R - 9, y + 9, 3.6);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.setTextColor(...C.muted);
+    doc.text("DONE", MARGIN_R - 9, y + 4.5, { align: "center" });
+    y += h + 4;
+  });
+
+  y = factCallout(
+    doc,
+    y,
+    "CDC advises against glue traps and live traps. Snap traps placed in a T against the baseboard -- trigger touching the wall -- catch more mice with fewer misses.",
+    "U.S. CDC, Trap Up Guidance"
+  );
+}
+
+/* ============================================================================
+   06 — EXPERT RESOURCES
+   ============================================================================ */
+function drawResources(doc: jsPDF, y: number): number {
+  y = sectionHeader(doc, "06", "Expert Resources", y);
+  y = bodyText(
+    doc,
+    "Go deeper with the full guides on MiceGoneGuide.com -- every link below is clickable in this PDF.",
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    8.8
+  );
+  y += 2;
 
   const resources = [
     {
-      title: "Complete Mouse Identification Guide",
-      desc: "Learn to identify species, read droppings, and understand behavior patterns specific to your region.",
-      url: "https://micegoneguide.com/mouse-identification-guide/",
+      title: "How to Get Rid of Mice -- Safe Home Plan",
+      desc: "The complete elimination playbook: inspection, trapping, cleanup, and sealing in the right order.",
+      url: "https://micegoneguide.com/how-to-get-rid-of-mice/",
     },
     {
-      title: "How to Mouse-Proof Your Home (Step-by-Step)",
-      desc: "Professional-grade sealing guide with exact product recommendations and contractor-level DIY techniques.",
-      url: "https://micegoneguide.com/mouse-proof-your-home/",
-    },
-    {
-      title: "Safe Cleanup & CDC Decontamination Protocol",
-      desc: "CDC-aligned procedures to safely clean mouse-contaminated areas and protect your family's health.",
+      title: "Mouse Droppings Cleanup -- CDC Wet-Cleaning SOP",
+      desc: "Step-by-step CDC-aligned decontamination so cleanup never spreads pathogens through your home.",
       url: "https://micegoneguide.com/mouse-droppings-cleanup/",
+    },
+    {
+      title: "Where to Place Mouse Traps",
+      desc: "Room-by-room trap placement maps based on real mouse travel routes and behavior.",
+      url: "https://micegoneguide.com/where-to-place-mouse-traps/",
+    },
+    {
+      title: "Mouse Proofing and Exclusion",
+      desc: "Seal your home like a pro: materials, tools, and the exact gaps mice exploit most.",
+      url: "https://micegoneguide.com/mouse-proofing-and-exclusion/",
     },
   ];
 
-  for (const res of resources) {
-    y = checkPage(doc, y, 20);
-    doc.setFillColor(...C.cardBg);
-    doc.setDrawColor(...C.primaryLight);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(MARGIN_L, y, CONTENT_W, 18, 3, 3, "FD");
-    doc.setFillColor(...C.primaryLight);
-    doc.roundedRect(MARGIN_L, y, 3.5, 18, 1, 1, "F");
-
-    doc.setFontSize(9);
+  for (const r of resources) {
+    y = checkPage(doc, y, 26);
+    const h = 22;
+    card(doc, y, h, { accent: C.emerald });
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.dark);
-    doc.text(res.title, MARGIN_L + 8, y + 6.5);
-
-    doc.setFontSize(7.5);
+    doc.setFontSize(9.2);
+    doc.setTextColor(...C.ink);
+    doc.text(sanitize(r.title), MARGIN_L + 9, y + 7.5);
     doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
     doc.setTextColor(...C.muted);
-    doc.text(res.desc, MARGIN_L + 8, y + 11.5);
+    const dl = wrapLines(doc, r.desc, CONTENT_W - 34, 8);
+    doc.text(dl.slice(0, 2), MARGIN_L + 9, y + 12.5);
+    addLink(doc, "Open guide >>", r.url, MARGIN_R - 34, y + 7.5, 7.5);
+    doc.link(MARGIN_L, y, CONTENT_W, h, { url: r.url });
+    y += h + 4;
+  }
+  return y;
+}
 
-    // Clickable "Visit Guide" link
-    doc.setTextColor(...C.blue);
+/* ============================================================================
+   FREE → PRO UPGRADE TEASER
+   ============================================================================ */
+function drawProTeaser(doc: jsPDF, y: number): number {
+  y = checkPage(doc, y, 72);
+  y += 4;
+  const h = 64;
+  doc.setFillColor(...C.goldSoft);
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(1);
+  doc.roundedRect(MARGIN_L - 2, y, CONTENT_W + 4, h, 5, 5, "FD");
+
+  doc.setFillColor(...C.gold);
+  doc.roundedRect(MARGIN_L + 4, y + 5, CONTENT_W - 8, 12, 3, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...C.white);
+  doc.text("UNLOCK YOUR COMPLETE ELIMINATION MASTERPLAN", 105, y + 13, { align: "center" });
+
+  const feats = [
+    "Room-by-room elimination strategy tailored to YOUR home",
+    "Exact product shopping list with recommendations",
+    "Day-by-day 30-day elimination timeline",
+    "CDC-aligned decontamination protocol",
+    "12-month prevention calendar",
+  ];
+  let fy = y + 24;
+  for (const f of feats) {
+    doc.setFillColor(...C.ok);
+    doc.circle(MARGIN_L + 8, fy - 1, 1.6, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.4);
+    doc.setTextColor(...C.body);
+    doc.text(sanitize(f), MARGIN_L + 14, fy);
+    fy += 5.4;
+  }
+
+  doc.setFillColor(...C.gold);
+  doc.roundedRect(58, y + h - 13, 94, 11, 5, 5, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...C.white);
+  doc.text("Upgrade -- $9.99 one-time", 105, y + h - 5.5, { align: "center" });
+  doc.link(58, y + h - 13, 94, 11, { url: "https://elimination.micegoneguide.com/quiz" });
+  return y + h + 6;
+}
+
+/* ============================================================================
+   PRO SECTIONS
+   ============================================================================ */
+function drawProRoomByRoom(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  // Pro masthead
+  doc.setFillColor(...C.gold);
+  doc.rect(0, 0, 210, 15, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...C.white);
+  doc.text("PRO ELIMINATION MASTERPLAN", 105, 9.8, { align: "center" });
+
+  let y = 24;
+  y = sectionHeader(doc, "P1", "Room-by-Room Elimination Strategy", y);
+  for (const s of report.roomByRoomStrategy) {
+    const clean = sanitize(s);
+    const colon = clean.indexOf(":");
+    const room = colon > 0 ? clean.slice(0, colon) : "Focus area";
+    const rest = colon > 0 ? clean.slice(colon + 1) : clean;
+    const lines = wrapLines(doc, rest, CONTENT_W - 18, 8.6);
+    const h = lines.length * 4.4 + 13;
+    y = checkPage(doc, y, h + 4);
+    card(doc, y, h, { accent: C.forest });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...C.forest);
+    doc.text(sanitize(room).toUpperCase(), MARGIN_L + 9, y + 7);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.6);
+    doc.setTextColor(...C.body);
+    doc.text(lines, MARGIN_L + 9, y + 12.5);
+    y += h + 4;
+  }
+}
+
+function drawProShopping(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "P2", "Personalized Shopping List", y);
+  y = bodyText(
+    doc,
+    "Everything below was chosen for your household and severity level. Links open the product search -- prices update live on the store.",
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    8.6
+  );
+  y += 2;
+
+  report.shoppingList.forEach((item, i) => {
+    const reason = wrapLines(doc, item.reason, CONTENT_W - 30, 8);
+    const h = Math.max(15, reason.length * 4.2 + 11);
+    y = checkPage(doc, y, h + 3);
+    card(doc, y, h, {});
+    doc.setFillColor(...C.goldSoft);
+    doc.setDrawColor(...C.goldDeep);
+    doc.setLineWidth(0.3);
+    doc.circle(MARGIN_L + 9, y + h / 2, 5, "FD");
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
-    doc.text("Visit Guide >>", MARGIN_R - 28, y + 6.5);
-    doc.link(MARGIN_L, y, CONTENT_W, 18, { url: res.url });
+    doc.setTextColor(...C.goldDeep);
+    doc.text(String(i + 1), MARGIN_L + 9, y + h / 2 + 1.8, { align: "center" });
 
-    y += 22;
-  }
+    doc.setFontSize(9.2);
+    doc.setTextColor(...C.ink);
+    doc.text(sanitize(item.name), MARGIN_L + 19, y + 7);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.muted);
+    doc.text(reason.slice(0, 2), MARGIN_L + 19, y + 12);
+    if (item.affiliateUrl) {
+      addLink(doc, "View on Amazon >>", item.affiliateUrl, MARGIN_R - 40, y + h - 5, 7.5);
+    }
+    y += h + 3;
+  });
+}
 
-  // ===== WHAT'S NOT IN THIS REPORT (PRO TEASER) =====
-  if (!isPro) {
-    y = checkPage(doc, y, 55);
-    y += 4;
+function drawProTimeline(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "P3", "30-Day Elimination Timeline", y);
 
-    // Premium upgrade box
-    doc.setFillColor(255, 252, 242);
-    doc.setDrawColor(...C.gold);
+  const lx = MARGIN_L + 26;
+  const startY = y + 2;
+  // compute total height first
+  type Row = { day: string; lines: string[] };
+  const rows: Row[] = report.eliminationTimeline.map((t) => ({
+    day: sanitize(t.day),
+    lines: wrapLines(doc, t.action, CONTENT_W - 40, 8.8),
+  }));
+  const rowHs = rows.map((r) => r.lines.length * 4.6 + 12);
+  const totalH = rowHs.reduce((a, b) => a + b, 0);
+  y = checkPage(doc, y, Math.min(totalH, 120) + 6);
+
+  rows.forEach((r, i) => {
+    const rh = rowHs[i];
+    y = checkPage(doc, y, rh + 4);
+    // connector line
+    doc.setDrawColor(...C.line);
     doc.setLineWidth(1.2);
-    doc.roundedRect(MARGIN_L - 2, y, CONTENT_W + 4, 55, 5, 5, "FD");
-
-    // Gold header bar inside
-    doc.setFillColor(...C.gold);
-    doc.roundedRect(MARGIN_L + 2, y + 4, CONTENT_W - 4, 12, 3, 3, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
+    const lineTop = i === 0 ? y + 8 : y - 4;
+    const lineBottom = i === rows.length - 1 ? y + 8 : y + rh + 4;
+    doc.line(lx, lineTop, lx, lineBottom);
+    // node
+    doc.setFillColor(...(i === 0 ? C.gold : C.forest));
+    doc.circle(lx, y + 8, 5, "F");
     doc.setFont("helvetica", "bold");
-    doc.text("UNLOCK YOUR COMPLETE ELIMINATION MASTERPLAN", 105, y + 12, { align: "center" });
+    doc.setFontSize(7);
+    doc.setTextColor(...C.white);
+    doc.text(String(i + 1), lx, y + 9.8, { align: "center" });
+    // day badge + action
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.forest);
+    doc.text(r.day.toUpperCase(), lx + 10, y + 6);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.8);
+    doc.setTextColor(...C.body);
+    doc.text(r.lines, lx + 10, y + 11.5);
+    y += rh;
+  });
+  y += 4;
+}
 
-    // Feature list
-    const proFeatures = [
-      "Room-by-room elimination strategy tailored to YOUR home",
-      "Exact product shopping list with recommendations",
-      "Day-by-day 30-day elimination timeline",
-      "CDC-aligned decontamination protocol",
-      "12-month prevention calendar",
-      "Pro branded PDF with everything included",
-    ];
-    let fy = y + 21;
-    for (const feat of proFeatures) {
-      doc.setFillColor(...C.green);
-      doc.circle(MARGIN_L + 8, fy, 1.2, "F");
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...C.text);
-      doc.text(feat, MARGIN_L + 14, fy + 1);
-      fy += 5;
+function drawProDecon(doc: jsPDF, report: ReportData): void {
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "P4", "CDC-Aligned Decontamination Protocol", y);
+  y = bodyText(
+    doc,
+    "Run this protocol only after trapping has reduced activity -- cleaning too early removes the scent trails you need for trap placement. Tick each step as you finish.",
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    8.8
+  );
+  y += 2;
+
+  report.decontaminationSteps.forEach((s, i) => {
+    const lines = wrapLines(doc, s, CONTENT_W - 32, 8.6);
+    const h = lines.length * 4.4 + 8;
+    y = checkPage(doc, y, h + 3);
+    card(doc, y, h, { bg: i === 4 ? C.dangerBg : C.white, border: i === 4 ? C.danger : C.line });
+    doc.setFillColor(...(i === 4 ? C.danger : C.forest));
+    doc.circle(MARGIN_L + 8, y + h / 2, 4, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...C.white);
+    doc.text(String(i + 1), MARGIN_L + 8, y + h / 2 + 1.6, { align: "center" });
+    doc.setFont("helvetica", i === 4 ? "bold" : "normal");
+    doc.setFontSize(8.6);
+    doc.setTextColor(...(i === 4 ? C.danger : C.body));
+    doc.text(lines, MARGIN_L + 16, y + 6.5);
+    checkbox(doc, MARGIN_R - 9, y + h / 2 + 1, 3.6);
+    y += h + 3;
+  });
+}
+
+function drawProCalendar(doc: jsPDF, report: ReportData): void {
+  void report;
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "P5", "12-Month Prevention Calendar", y);
+  y = bodyText(
+    doc,
+    "Mice invade hardest in fall when they seek winter shelter. These six checkpoints keep you ahead of the seasonal cycle all year.",
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    8.8
+  );
+  y += 2;
+
+  const cw = (CONTENT_W - 6) / 2;
+  const ch = 34;
+  const items = report.preventionCalendar;
+  for (let i = 0; i < items.length; i += 2) {
+    y = checkPage(doc, y, ch + 4);
+    for (let col = 0; col < 2 && i + col < items.length; col++) {
+      const p = items[i + col];
+      const cx = MARGIN_L + col * (cw + 6);
+      card(doc, y, ch, { accent: /september/i.test(p.month) ? C.gold : C.forest, x: cx, w: cw });
+      monthCard(doc, cx, y, cw, ch, p.month, p.task);
     }
+    y += ch + 4;
+  }
+  y += 2;
 
-    // CTA button
-    doc.setFillColor(...C.gold);
-    doc.roundedRect(55, y + 53 - 5, 100, 11, 5, 5, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("Upgrade for $9.99 -- One-Time", 105, y + 53 + 2, { align: "center" });
-    doc.link(55, y + 53 - 5, 100, 11, { url: "https://elimination.micegoneguide.com/quiz" });
+  y = infoCard(
+    doc,
+    y,
+    "September is critical",
+    C.goldDeep,
+    "Pre-fall sealing is the highest-leverage prevention task of the year. Close every gap before cold weather drives mice indoors.",
+    C.gold
+  );
+}
+
+function monthCard(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  month: string,
+  task: string
+): void {
+  doc.setFillColor(...C.forest);
+  doc.roundedRect(x + 5, y + 5, 26, 7, 2, 2, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.8);
+  doc.setTextColor(...C.white);
+  doc.text(sanitize(month).substring(0, 3).toUpperCase(), x + 18, y + 10, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.body);
+  const lines = doc.splitTextToSize(sanitize(task), w - 14);
+  doc.text(lines.slice(0, 4), x + 7, y + 18);
+  void h;
+}
+
+/* ============================================================================
+   PREMIUM WORKBOOK (W1–W5)
+   ============================================================================ */
+function workbookLines(doc: jsPDF, y: number, lbl: string, lines = 3): number {
+  y = checkPage(doc, y, lines * 8 + 14);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.6);
+  doc.setTextColor(...C.forest);
+  doc.text(sanitize(lbl), MARGIN_L + 2, y);
+  y += 6;
+  doc.setDrawColor(...C.line);
+  doc.setLineWidth(0.3);
+  for (let i = 0; i < lines; i++) {
+    doc.line(MARGIN_L + 2, y, MARGIN_R - 2, y);
+    y += 8;
+  }
+  return y + 3;
+}
+
+function drawWorkbook(doc: jsPDF, report: ReportData): void {
+  // W1 — blueprint intro
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = sectionHeader(doc, "W1", "Premium Elimination Blueprint", y);
+  y = bodyText(
+    doc,
+    `This workbook turns your diagnosis into a homeowner operating plan. Work it in order for a ${sanitize(report.severityLabel).toLowerCase()} ${sanitize(report.species.name)} situation: contain tonight, seal this week, deplete, then prove prevention.`,
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    9
+  );
+  y += 2;
+  y = infoCard(doc, y, "Tonight's containment objective", C.goldDeep, "Reduce food access, block movement into clean zones, identify your top 2 likely entry routes, and place traps where mice already travel. Do not deep-clean until contaminated areas are wetted with disinfectant.", C.gold);
+  const sc = severityColor(report.severity);
+  y = infoCard(doc, y, "Severity-based focus", sc.fg, `Your score is ${report.severity}/10. If activity is spreading across rooms, prioritize containment and sealing before cosmetic cleaning. If you see mice in daylight or find fresh droppings daily, escalate faster and consider a licensed professional.`, sc.fg);
+  y = infoCard(doc, y, "Species-specific clue", C.ok, `${sanitize(report.species.name)}: ${sanitize(report.species.behavior)} Place traps along actual routes -- not in open floor space.`, C.ok);
+
+  // W2 — decision filter
+  doc.addPage();
+  drawTopBar(doc);
+  y = 24;
+  y = sectionHeader(doc, "W2", "Decision Filter: What To Do First", y);
+  const filters: [string, string, RGB][] = [
+    ["Safety", "Droppings, urine, or nesting material present? Wet-clean only -- never dry sweep or vacuum contaminated debris.", C.danger],
+    ["Food pressure", "What food, pet food, crumbs, trash, bird seed, or pantry item rewards the route? Remove rewards before adding traps.", C.goldDeep],
+    ["Travel route", "Where do walls, cabinets, appliances, pipes, or baseboards create a runway? Place traps perpendicular to those routes.", C.forest],
+    ["Entry point", "Which gap can you seal today with copper mesh + sealant? Prioritize holes near utilities, doors, garages, and foundations.", C.emerald],
+    ["Proof", "What will you track tomorrow morning: trap activity, fresh droppings, new sounds, food disturbance, or camera footage?", C.blue],
+  ];
+  for (const [t, b, accent] of filters) {
+    y = infoCard(doc, y, t, accent, b, accent);
   }
 
-  // ===== PRO CONTENT =====
-  if (isPro) {
-    doc.addPage();
-    let py = 18;
-
-    // Pro header
-    doc.setFillColor(...C.gold);
-    doc.rect(0, 0, 210, 14, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("PRO ELIMINATION MASTERPLAN", 105, 9, { align: "center" });
-
-    // Room-by-Room
-    py = sectionHeader(doc, py, "ROOM-BY-ROOM ELIMINATION STRATEGY", "P1");
-    for (const s of report.roomByRoomStrategy) {
-      py = checkPage(doc, py, 16);
-      const lines = doc.splitTextToSize(sanitize(s), CONTENT_W - 14);
-      const h = lines.length * 4 + 6;
-      card(doc, py, h, { border: C.primaryLight });
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...C.text);
-      doc.text(lines, MARGIN_L + 8, py + 5);
-      py += h + 3;
-    }
-
-    // Shopping List
-    py = checkPage(doc, py, 20);
-    py = sectionHeader(doc, py, "PERSONALIZED SHOPPING LIST", "P2");
-    for (const item of report.shoppingList) {
-      py = checkPage(doc, py, 16);
-      doc.setFillColor(...C.green);
-      doc.circle(MARGIN_L + 5, py + 1, 2, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(6);
-      doc.setFont("helvetica", "bold");
-      doc.text("$", MARGIN_L + 5, py + 2.5, { align: "center" });
-
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...C.dark);
-      doc.text(sanitize(item.name), MARGIN_L + 12, py + 1);
-      doc.setFontSize(7.5);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...C.muted);
-      doc.text(sanitize(item.reason), MARGIN_L + 12, py + 6);
-
-      // Add clickable "Buy on Amazon" link
-      if (item.affiliateUrl) {
-        addLink(doc, "View on Amazon >>", item.affiliateUrl, MARGIN_L + 12, py + 11, 7);
-        py += 16;
-      } else {
-        py += 11;
-      }
-    }
-
-    // Timeline
-    py = checkPage(doc, py, 20);
-    py = sectionHeader(doc, py, "30-DAY ELIMINATION TIMELINE", "P3");
-    for (const t of report.eliminationTimeline) {
-      py = checkPage(doc, py, 14);
-      // Day badge
-      doc.setFillColor(...C.primary);
-      const dayText = sanitize(t.day);
-      const dayW = Math.max(doc.getTextWidth(dayText) * 1.3 + 6, 28);
-      doc.roundedRect(MARGIN_L, py, dayW, 7, 2, 2, "F");
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text(dayText, MARGIN_L + 3, py + 5);
-
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...C.text);
-      const tLines = doc.splitTextToSize(sanitize(t.action), CONTENT_W - dayW - 8);
-      doc.text(tLines, MARGIN_L + dayW + 4, py + 5);
-      py += tLines.length * 4.5 + 5;
-    }
-
-    // Decontamination
-    py = checkPage(doc, py, 20);
-    py = sectionHeader(doc, py, "CDC-ALIGNED DECONTAMINATION PROTOCOL", "P4");
-    for (let i = 0; i < report.decontaminationSteps.length; i++) {
-      py = checkPage(doc, py, 12);
-      doc.setFillColor(...C.red);
-      doc.circle(MARGIN_L + 5, py + 1.5, 3, "F");
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "bold");
-      doc.text(String(i + 1), MARGIN_L + 5, py + 3, { align: "center" });
-
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...C.text);
-      const lines = doc.splitTextToSize(sanitize(report.decontaminationSteps[i]), CONTENT_W - 18);
-      doc.text(lines, MARGIN_L + 14, py + 2);
-      py += lines.length * 4 + 4;
-    }
-
-    // Prevention Calendar
-    py = checkPage(doc, py, 20);
-    py = sectionHeader(doc, py, "12-MONTH PREVENTION CALENDAR", "P5");
-    for (const p of report.preventionCalendar) {
-      py = checkPage(doc, py, 12);
-      doc.setFillColor(...C.primary);
-      doc.roundedRect(MARGIN_L, py, 22, 7, 2, 2, "F");
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text(sanitize(p.month).substring(0, 3).toUpperCase(), MARGIN_L + 11, py + 5, { align: "center" });
-
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...C.text);
-      const pLines = doc.splitTextToSize(sanitize(p.task), CONTENT_W - 30);
-      doc.text(pLines, MARGIN_L + 26, py + 5);
-      py += pLines.length * 4.5 + 4;
-    }
+  // W3 — entry-point audit
+  doc.addPage();
+  drawTopBar(doc);
+  y = 24;
+  y = sectionHeader(doc, "W3", "Entry-Point Audit Worksheet", y);
+  y = bodyText(
+    doc,
+    "Walk the exterior and interior slowly with a flashlight. Note evidence and your seal plan for each zone.",
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    9
+  );
+  y += 2;
+  for (const area of [
+    "Kitchen / pantry / appliances",
+    "Garage / basement / utility lines",
+    "Exterior foundation / siding / vents",
+    "Attic / roofline / soffits",
+    "Doors / weatherstripping / thresholds",
+  ]) {
+    y = workbookLines(doc, y, `${area} -- evidence + seal plan`, 3);
   }
 
+  // W4 — 30-day map
+  doc.addPage();
+  drawTopBar(doc);
+  y = 24;
+  y = sectionHeader(doc, "W4", "30-Day Elimination Map", y);
+  const weeks: [string, string, RGB][] = [
+    ["Days 1-3: Contain", "Remove food rewards, isolate contaminated zones, place traps on travel routes, document fresh activity. Wet-clean only after disinfectant contact time.", C.gold],
+    ["Days 4-10: Seal", "Close confirmed gaps with rodent-resistant materials. Recheck utilities, doors, garage edges, exterior pipes, and cabinet penetrations.", C.forest],
+    ["Days 11-20: Deplete", "Maintain trap pressure. Move traps only when evidence shifts. Watch whether droppings and sounds decrease.", C.emerald],
+    ["Days 21-30: Prove prevention", "Confirm no fresh droppings, smells, food disturbance, or sounds. Reset sanitation routines and monthly exterior checks.", C.blue],
+  ];
+  for (const [t, b, accent] of weeks) {
+    y = infoCard(doc, y, t, accent, b, accent);
+  }
+  y = infoCard(
+    doc,
+    y,
+    "What success looks like",
+    C.ok,
+    "One full week with zero catches, zero new droppings, zero new sounds, and zero food disturbance is a monitoring checkpoint -- keep monitoring, and keep gaps sealed, because mice return fast if entry points stay open.",
+    C.ok
+  );
+  y = workbookLines(doc, y, "My top 3 actions this week", 4);
 
-  drawPremiumBlueprintWorkbook(doc, report);
+  // W5 — tracking log
+  doc.addPage();
+  drawTopBar(doc);
+  y = 24;
+  y = sectionHeader(doc, "W5", "Printable Tracking Log", y);
+  y = bodyText(
+    doc,
+    "Log evidence daily. The goal is not just fewer sightings -- it is no new droppings, no fresh sounds, no food disturbance, and no trap activity over time.",
+    MARGIN_L,
+    y,
+    CONTENT_W,
+    9
+  );
+  y += 2;
+  for (const lbl of [
+    "Day / room / evidence found",
+    "Trap placement + result",
+    "Food or attractant removed",
+    "Gap found or sealed",
+    "Next adjustment",
+  ]) {
+    y = workbookLines(doc, y, lbl, 3);
+  }
+}
 
-  // ===== FOOTER on every page =====
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
+/* ============================================================================
+   CLOSING PAGE
+   ============================================================================ */
+function drawClosing(doc: jsPDF): void {
+  doc.addPage();
+  doc.setFillColor(...C.forestDeep);
+  doc.rect(0, 0, 210, 297, "F");
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(0.9);
+  doc.rect(11, 11, 188, 275, "D");
+
+  doc.setFillColor(...C.gold);
+  doc.rect(0, 0, 210, 4, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(24);
+  doc.setTextColor(...C.white);
+  doc.text("Your plan is ready.", 105, 90, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(185, 205, 190);
+  doc.text("Work the blueprint in order -- contain, seal,", 105, 106, { align: "center" });
+  doc.text("deplete, then prove prevention.", 105, 113, { align: "center" });
+
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(0.8);
+  doc.line(85, 126, 125, 126);
+
+  const links: [string, string][] = [
+    ["Safe Home Plan", "https://micegoneguide.com/how-to-get-rid-of-mice/"],
+    ["CDC Wet-Cleaning SOP", "https://micegoneguide.com/mouse-droppings-cleanup/"],
+    ["Trap Placement Maps", "https://micegoneguide.com/where-to-place-mouse-traps/"],
+  ];
+  let ly = 145;
+  links.forEach(([t, url]) => {
+    doc.setFillColor(24, 58, 37);
+    doc.roundedRect(55, ly, 100, 13, 6.5, 6.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...C.white);
+    doc.text(sanitize(t), 105, ly + 8.5, { align: "center" });
+    doc.link(55, ly, 100, 13, { url });
+    ly += 18;
+  });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 150, 132);
+  doc.text("MiceGoneGuide.com -- Professional-Grade Mouse Elimination Intelligence", 105, 262, { align: "center" });
+  doc.setFontSize(6.5);
+  doc.text(
+    "This report is for informational purposes and is not a substitute for professional advice.",
+    105,
+    269,
+    { align: "center" }
+  );
+  doc.setFillColor(...C.gold);
+  doc.rect(0, 293, 210, 4, "F");
+  doc.link(30, 255, 150, 20, { url: "https://micegoneguide.com" });
+}
+
+/* ============================================================================
+   FOOTER (all content pages)
+   ============================================================================ */
+function drawFooters(doc: jsPDF, skipPages: Set<number>): void {
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    if (skipPages.has(i)) continue;
     doc.setPage(i);
-    if (i === 1) continue; // Cover has its own footer
-
-    doc.setFillColor(...C.primary);
+    doc.setFillColor(...C.forest);
     doc.rect(0, 288, 210, 9, "F");
     doc.setFillColor(...C.gold);
-    doc.rect(0, 287.5, 210, 0.5, "F");
-
-    doc.setTextColor(170, 195, 180);
-    doc.setFontSize(6.5);
+    doc.rect(0, 287.4, 210, 0.6, "F");
     doc.setFont("helvetica", "normal");
-    doc.text("MiceGoneGuide.com -- Professional-Grade Mouse Elimination Intelligence", 105, 293, { align: "center" });
-    doc.text(`Page ${i} of ${pageCount}`, MARGIN_R, 293, { align: "right" });
-    doc.link(40, 289, 130, 8, { url: "https://micegoneguide.com" });
+    doc.setFontSize(6.8);
+    doc.setTextColor(175, 198, 183);
+    doc.text("MiceGoneGuide.com -- Mouse Elimination Blueprint", MARGIN_L, 293.6);
+    doc.text(`Page ${i} of ${total}`, MARGIN_R, 293.6, { align: "right" });
+    doc.link(MARGIN_L, 288.5, 110, 8, { url: "https://micegoneguide.com" });
   }
+}
+
+/* ============================================================================
+   MAIN ENTRY
+   ============================================================================ */
+export function generatePDF(
+  report: ReportData,
+  isPro = false,
+  answers?: QuizAnswers
+): jsPDF {
+  tocEntries = [];
+  tocPageNum = 0;
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  doc.setProperties({
+    title: "Mouse Elimination Blueprint -- MiceGoneGuide",
+    author: "MiceGoneGuide.com",
+    subject: "Personalized mouse elimination diagnostic report, safety plan and action workbook",
+    keywords: "mice, mouse elimination, pest control, CDC cleanup, trap placement, sealing entry points",
+  });
+
+  drawCover(doc, report);                    // p1
+  drawExecutiveSummary(doc, report);          // p2
+  drawSnapshotAndTOC(doc, report, answers);   // p3 (TOC numbers filled later)
+  drawSeverity(doc, report);                  // 01
+  drawSpecies(doc, report);                   // 02
+  drawHealth(doc, report);                    // 03
+  drawEntryPoints(doc, report);               // 04
+  drawActions(doc, report);                   // 05
+
+  doc.addPage();
+  drawTopBar(doc);
+  let y = 24;
+  y = drawResources(doc, y);                  // 06
+  if (!isPro) {
+    y = drawProTeaser(doc, y);
+  }
+
+  if (isPro) {
+    drawProRoomByRoom(doc, report);            // P1
+    drawProShopping(doc, report);             // P2
+    drawProTimeline(doc, report);             // P3
+    drawProDecon(doc, report);                // P4
+    drawProCalendar(doc, report);             // P5
+  }
+
+  drawWorkbook(doc, report);                  // W1–W5
+  drawClosing(doc);                           // closing (own footer)
+
+  const total = doc.getNumberOfPages();
+  fillTOC(doc);
+  drawFooters(doc, new Set([1, total]));
 
   return doc;
 }

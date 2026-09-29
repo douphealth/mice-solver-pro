@@ -129,7 +129,7 @@ export function generateReport(answers: QuizAnswers): ReportData {
   const severityLabel = severity <= 3 ? "Mild" : severity <= 6 ? "Moderate" : severity <= 8 ? "Significant" : "Severe";
 
   const severityDescriptions: Record<string, string> = {
-    Mild: `Your score is ${severity}/10 — This appears to be an early-stage situation, likely 1-2 mice exploring your home. Catching it now means the easiest and cheapest fix. Act within the next 7 days for best results.`,
+    Mild: `Your score is ${severity}/10 — This appears to be an early-stage situation, likely 1-2 mice exploring your home. Catching it now means the easiest and cheapest fix. Act within the next 14 days for best results.`,
     Moderate: `Your score is ${severity}/10 — This is a moderate, active infestation that has likely been developing for 3-5 weeks. Without intervention, the population could double within 30 days.`,
     Significant: `Your score is ${severity}/10 — This is a well-established infestation with multiple nesting sites. The population is actively growing and spreading through your home. Immediate, multi-pronged action is critical.`,
     Severe: `Your score is ${severity}/10 — This is a severe infestation requiring aggressive, immediate action. Multiple generations are likely present with established travel routes and nesting sites throughout your home.`,

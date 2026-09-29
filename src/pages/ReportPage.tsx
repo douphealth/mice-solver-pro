@@ -60,7 +60,7 @@ export default function ReportPage() {
 
   const handleDownloadPDF = () => {
     trackEvent("pdf_downloaded", { severity: report.severity, species: report.species.name });
-    const doc = generatePDF(report, false);
+    const doc = generatePDF(report, false, answers);
     doc.save("MiceGoneGuide-Premium-Elimination-Blueprint.pdf");
   };
 
