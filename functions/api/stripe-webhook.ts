@@ -1,4 +1,4 @@
-import { APP_ID, errorResponse, json   type StripeEnv,\n} from "./_stripe";
+import { APP_ID, errorResponse, json, type StripeEnv } from "./_stripe";
 
 function parseStripeSignature(header: string) {
   let timestamp = "";
