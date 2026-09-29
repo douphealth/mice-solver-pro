@@ -1,6 +1,7 @@
 import {
-  APP_ID, decodeAnswersMetadata, errorResponse, expectedModeMatches, json, priceId, stripeRequest
-  type StripeEnv,\n} from "./_stripe";
+  APP_ID, decodeAnswersMetadata, errorResponse, expectedModeMatches, json, priceId,
+  stripeRequest, type StripeEnv,
+} from "./_stripe";
 
 interface FunctionContext {
   request: Request;
