@@ -1,4 +1,4 @@
-import { APP_ID, errorResponse, json } from "./_stripe";
+import { APP_ID, errorResponse, json   type StripeEnv,\n} from "./_stripe";
 
 function parseStripeSignature(header: string) {
   let timestamp = "";
@@ -47,7 +47,12 @@ async function validSignature(rawBody: string, header: string, secret: string) {
   return signatures.some((signature) => constantTimeEqual(signature, expected));
 }
 
-export async function onRequestPost(context: any) {
+interface FunctionContext {
+  request: Request;
+  env: StripeEnv;
+}
+
+export async function onRequestPost(context: FunctionContext) {
   try {
     const secret = context.env.STRIPE_WEBHOOK_SECRET?.trim();
     if (!secret || !secret.startsWith("whsec_")) {
