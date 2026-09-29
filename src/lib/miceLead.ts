@@ -27,7 +27,7 @@ export async function submitMiceLead(payload: MiceLeadPayload) {
     ? `quiz_gate_${payload.species.toLowerCase().replace(/\s+/g, '_')}_${payload.severity ?? 'unknown'}`
     : 'quiz_gate';
 
-  const { data, error: dbError } = await supabase
+  const { error: dbError } = await supabase
     .from("email_subscribers")
     .upsert(
       {
@@ -35,14 +35,13 @@ export async function submitMiceLead(payload: MiceLeadPayload) {
         name: payload.name?.trim() || null,
         source: sourceTag,
       },
-      { onConflict: "email" }
-    )
-    .select();
+      { onConflict: "email", ignoreDuplicates: true }
+    );
 
   if (dbError) {
     console.error("Fallback direct database insert failed:", dbError);
-    throw new Error(dbError.message || 'Could not save subscriber lead.');
+    throw new Error(dbError.message || "Could not save subscriber lead.");
   }
 
-  return { ok: true, message: "Saved to database (fallback)", data };
+  return { ok: true, message: "Saved to database (fallback)" };
 }
