@@ -1,6 +1,11 @@
-import { errorResponse, expectedModeMatches, json, priceId, stripeRequest } from "./_stripe";
+import { errorResponse, expectedModeMatches, json, priceId, stripeRequest, type StripeEnv } from "./_stripe";
 
-export async function onRequestGet(context: any) {
+interface FunctionContext {
+  request: Request;
+  env: StripeEnv;
+}
+
+export async function onRequestGet(context: FunctionContext) {
   try {
     const id = priceId(context.env);
     const price = await stripeRequest(context.env, `/prices/${encodeURIComponent(id)}`, { method: "GET" });
