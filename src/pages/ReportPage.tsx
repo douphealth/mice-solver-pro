@@ -43,9 +43,10 @@ export default function ReportPage() {
     [purchaseSessionId]
   );
   const cachedQuizAnswers = useMemo(() => loadQuizAnswers(), []);
-  const answers = state?.answers || paidCache?.answers || cachedQuizAnswers;
+  const initialAnswers = state?.answers || paidCache?.answers || cachedQuizAnswers;
   const checkoutCancelled = search.get("checkout") === "cancelled";
 
+  const [answers, setAnswers] = useState<QuizAnswers | null>(initialAnswers || null);
   const [isPro, setIsPro] = useState(false);
   const [proChecking, setProChecking] = useState(Boolean(purchaseSessionId));
   const [entitlementError, setEntitlementError] = useState("");
@@ -76,6 +77,8 @@ export default function ReportPage() {
         if (!response.ok || !body?.verified || !body?.paid || !body?.answers) {
           throw new Error(body?.error || "Pro access could not be verified.");
         }
+        setAnswers(body.answers);
+        saveQuizAnswers(body.answers);
         savePaidReport({
           sessionId: body.sessionId,
           answers: body.answers,
@@ -97,7 +100,9 @@ export default function ReportPage() {
 
   useEffect(() => {
     if (!answers) {
-      navigate("/quiz", { replace: true });
+      if (!purchaseSessionId && !proChecking) {
+        navigate("/quiz", { replace: true });
+      }
       return;
     }
 
@@ -116,7 +121,7 @@ export default function ReportPage() {
       window.clearInterval(factTimer);
       window.clearTimeout(loadTimer);
     };
-  }, [answers, isPro, navigate]);
+  }, [answers, isPro, navigate, purchaseSessionId, proChecking]);
 
   const report = useMemo(() => {
     if (!answers) return null;
@@ -131,8 +136,9 @@ export default function ReportPage() {
     trackEvent("email_captured");
   };
 
+  if (proChecking) return <ReportLoading factIndex={factIndex} />;
   if (!answers || !report) return null;
-  if (loading || proChecking) return <ReportLoading factIndex={factIndex} />;
+  if (loading) return <ReportLoading factIndex={factIndex} />;
   if (showEmailGate && !emailCaptured && !isPro) {
     return (
       <EmailCaptureModal
