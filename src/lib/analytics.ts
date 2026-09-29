@@ -10,6 +10,9 @@ type EventName =
   | "pdf_downloaded"
   | "email_captured"
   | "premium_checkout_clicked"
+  | "premium_checkout_started"
+  | "payment_verified"
+  | "payment_verification_failed"
   | "page_viewed";
 
 interface EventProperties {
