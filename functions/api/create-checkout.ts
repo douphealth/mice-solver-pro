@@ -1,9 +1,14 @@
 import {
   APP_ID, appOrigin, encodeAnswersMetadata, errorResponse, expectedModeMatches,
   json, normalizeEmail, priceId, stripeRequest
-} from "./_stripe";
+  type StripeEnv,\n} from "./_stripe";
 
-export async function onRequestPost(context: any) {
+interface FunctionContext {
+  request: Request;
+  env: StripeEnv;
+}
+
+export async function onRequestPost(context: FunctionContext) {
   try {
     const request = context.request as Request;
     const payload = await request.json().catch(() => null);
