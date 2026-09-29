@@ -125,7 +125,7 @@ function drawCoverPage(doc: jsPDF, report: ReportData) {
     { label: "30-DAY PROJECTION", value: `${report.populationIn30Days.min}-${report.populationIn30Days.max} mice` },
   ];
 
-  let my = 178;
+  const my = 178;
   doc.setFillColor(30, 65, 42);
   doc.roundedRect(30, my, 150, 60, 5, 5, "F");
 
