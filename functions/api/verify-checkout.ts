@@ -1,8 +1,13 @@
 import {
   APP_ID, decodeAnswersMetadata, errorResponse, expectedModeMatches, json, priceId, stripeRequest
-} from "./_stripe";
+  type StripeEnv,\n} from "./_stripe";
 
-export async function onRequestGet(context: any) {
+interface FunctionContext {
+  request: Request;
+  env: StripeEnv;
+}
+
+export async function onRequestGet(context: FunctionContext) {
   try {
     const request = context.request as Request;
     const sessionId = new URL(request.url).searchParams.get("session_id")?.trim() || "";
