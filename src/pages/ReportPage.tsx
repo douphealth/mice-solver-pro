@@ -10,6 +10,7 @@ import {
   loadPaidReport,
   loadQuizAnswers,
   saveCapturedEmail,
+  savePaidReport,
   saveQuizAnswers,
 } from "@/lib/report-session";
 import Navbar from "@/components/Navbar";
@@ -43,14 +44,56 @@ export default function ReportPage() {
   );
   const cachedQuizAnswers = useMemo(() => loadQuizAnswers(), []);
   const answers = state?.answers || paidCache?.answers || cachedQuizAnswers;
-  const isPro = Boolean(state?.isPro || paidCache);
   const checkoutCancelled = search.get("checkout") === "cancelled";
 
+  const [isPro, setIsPro] = useState(false);
+  const [proChecking, setProChecking] = useState(Boolean(purchaseSessionId));
+  const [entitlementError, setEntitlementError] = useState("");
   const [loading, setLoading] = useState(true);
   const [factIndex, setFactIndex] = useState(0);
   const [showEmailGate, setShowEmailGate] = useState(false);
   const [capturedEmail, setCapturedEmail] = useState(() => loadCapturedEmail());
   const [emailCaptured, setEmailCaptured] = useState(() => Boolean(loadCapturedEmail()));
+
+  useEffect(() => {
+    if (!purchaseSessionId) {
+      setIsPro(false);
+      setProChecking(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setProChecking(true);
+    setEntitlementError("");
+
+    fetch(`/api/verify-checkout?session_id=${encodeURIComponent(purchaseSessionId)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body?.verified || !body?.paid || !body?.answers) {
+          throw new Error(body?.error || "Pro access could not be verified.");
+        }
+        savePaidReport({
+          sessionId: body.sessionId,
+          answers: body.answers,
+          verifiedAt: new Date().toISOString(),
+          amountTotal: body.amountTotal,
+          currency: body.currency,
+        });
+        setIsPro(true);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setIsPro(false);
+        setEntitlementError(error instanceof Error ? error.message : "Pro access could not be verified.");
+      })
+      .finally(() => setProChecking(false));
+
+    return () => controller.abort();
+  }, [purchaseSessionId]);
 
   useEffect(() => {
     if (!answers) {
@@ -89,7 +132,7 @@ export default function ReportPage() {
   };
 
   if (!answers || !report) return null;
-  if (loading) return <ReportLoading factIndex={factIndex} />;
+  if (loading || proChecking) return <ReportLoading factIndex={factIndex} />;
   if (showEmailGate && !emailCaptured && !isPro) {
     return (
       <EmailCaptureModal
@@ -169,6 +212,16 @@ export default function ReportPage() {
       </div>
 
       <div className="container mx-auto px-4 py-10 max-w-3xl">
+        {entitlementError && purchaseSessionId && (
+          <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 flex gap-3 items-start text-sm text-muted-foreground">
+            <XCircle className="h-5 w-5 shrink-0 text-destructive" />
+            <div>
+              <p className="font-semibold text-foreground">Pro access not verified</p>
+              <p>{entitlementError}</p>
+            </div>
+          </div>
+        )}
+
         {checkoutCancelled && (
           <div className="mb-6 rounded-xl border border-border bg-muted/40 px-4 py-3 flex gap-3 items-start text-sm text-muted-foreground">
             <XCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
