@@ -7,7 +7,7 @@ import { submitMiceLead } from "@/lib/miceLead";
 
 interface Props {
   open: boolean;
-  onSuccess: () => void;
+  onSuccess: (email: string) => void;
   severity?: number;
   species?: string;
 }
@@ -22,6 +22,7 @@ export default function EmailCaptureModal({ open, onSuccess, severity, species }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
     if (!isValidEmail) {
       setError("Please enter a valid email address.");
       return;
@@ -30,7 +31,7 @@ export default function EmailCaptureModal({ open, onSuccess, severity, species }
     setError("");
     try {
       await submitMiceLead({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         name: name.trim() || undefined,
         severity,
         species,
@@ -40,7 +41,7 @@ export default function EmailCaptureModal({ open, onSuccess, severity, species }
       // We proceed to show the report anyway so the user experience is never blocked by API issues
     }
     setLoading(false);
-    onSuccess();
+    onSuccess(normalizedEmail);
   };
 
   return (
@@ -70,7 +71,7 @@ export default function EmailCaptureModal({ open, onSuccess, severity, species }
                 Your Mouse Elimination Blueprint is Ready
               </h2>
               <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-                Enter your email to unlock your personalized diagnosis and the premium Blueprint PDF — a practical, printable plan with severity insights, entry-point priorities, safety steps, decision filters, and a 30-day elimination action map.
+                Enter your email to unlock your personalized diagnosis and free printable summary. The paid Pro masterplan remains a separate optional upgrade.
               </p>
 
               <div className="grid grid-cols-2 gap-2 mb-5 text-left">
@@ -114,7 +115,7 @@ export default function EmailCaptureModal({ open, onSuccess, severity, species }
                   ) : (
                     <ArrowRight className="h-4 w-4" />
                   )}
-                  {loading ? "Sending Blueprint..." : "Unlock Report + Free Blueprint PDF"}
+                  {loading ? "Sending Blueprint..." : "Unlock Report + Free Summary PDF"}
                 </Button>
               </form>
 

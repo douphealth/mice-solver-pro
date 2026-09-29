@@ -516,7 +516,7 @@ serve(async (req) => {
     }
 
     const sendResendEmail = async (subject: string, htmlContent: string, scheduledAt?: string) => {
-      const payload: Record<string, any> = {
+      const payload: Record<string, string | string[]> = {
         from: senderEmail,
         to: [email],
         subject,

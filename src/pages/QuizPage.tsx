@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { quizSteps, QuizAnswers } from "@/lib/quiz-data";
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Shield } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { saveQuizAnswers } from "@/lib/report-session";
 
 export default function QuizPage() {
   const navigate = useNavigate();
@@ -66,6 +67,7 @@ export default function QuizPage() {
       const finalAnswers = { ...answers };
       if (current.type === "zip") finalAnswers.zip = zipValue;
       trackEvent("quiz_completed", { steps: activeSteps.length });
+      saveQuizAnswers(finalAnswers);
       navigate("/report", { state: { answers: finalAnswers } });
     }
   };

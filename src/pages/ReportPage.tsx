@@ -4,11 +4,19 @@ import { motion } from "framer-motion";
 import { generateReport } from "@/lib/report-generator";
 import { trackEvent } from "@/lib/analytics";
 import { generatePDF } from "@/lib/pdf-generator";
-import { QuizAnswers } from "@/lib/quiz-data";
+import type { QuizAnswers } from "@/lib/quiz-data";
+import {
+  loadCapturedEmail,
+  loadPaidReport,
+  loadQuizAnswers,
+  saveCapturedEmail,
+  savePaidReport,
+  saveQuizAnswers,
+} from "@/lib/report-session";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Download, RotateCcw, Share2, CheckCircle2, FileText, Shield, Sparkles } from "lucide-react";
+import { Download, RotateCcw, Share2, CheckCircle2, FileText, Shield, XCircle } from "lucide-react";
 import ReportLoading from "@/components/report/ReportLoading";
 import ReportSeveritySection from "@/components/report/ReportSeveritySection";
 import ReportSpeciesSection from "@/components/report/ReportSpeciesSection";
@@ -18,61 +26,154 @@ import ReportActionsSection from "@/components/report/ReportActionsSection";
 import ReportPremiumPreview from "@/components/report/ReportPremiumPreview";
 import EmailCaptureModal from "@/components/EmailCaptureModal";
 
+interface ReportLocationState {
+  answers?: QuizAnswers;
+  isPro?: boolean;
+  purchaseSessionId?: string;
+}
+
 export default function ReportPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const state = (location.state as ReportLocationState | null) || null;
+  const search = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const purchaseSessionId = state?.purchaseSessionId || search.get("purchase");
+  const paidCache = useMemo(
+    () => (purchaseSessionId ? loadPaidReport(purchaseSessionId) : null),
+    [purchaseSessionId]
+  );
+  const cachedQuizAnswers = useMemo(() => loadQuizAnswers(), []);
+  const initialAnswers = state?.answers || paidCache?.answers || cachedQuizAnswers;
+  const checkoutCancelled = search.get("checkout") === "cancelled";
+
+  const [answers, setAnswers] = useState<QuizAnswers | null>(initialAnswers || null);
+  const [isPro, setIsPro] = useState(false);
+  const [proChecking, setProChecking] = useState(Boolean(purchaseSessionId));
+  const [entitlementError, setEntitlementError] = useState("");
   const [loading, setLoading] = useState(true);
   const [factIndex, setFactIndex] = useState(0);
   const [showEmailGate, setShowEmailGate] = useState(false);
-  const [emailCaptured, setEmailCaptured] = useState(false);
+  const [capturedEmail, setCapturedEmail] = useState(() => loadCapturedEmail());
+  const [emailCaptured, setEmailCaptured] = useState(() => Boolean(loadCapturedEmail()));
 
-  const answers = (location.state as { answers: QuizAnswers } | null)?.answers;
+  useEffect(() => {
+    if (!purchaseSessionId) {
+      setIsPro(false);
+      setProChecking(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setProChecking(true);
+    setEntitlementError("");
+
+    fetch(`/api/verify-checkout?session_id=${encodeURIComponent(purchaseSessionId)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body?.verified || !body?.paid || !body?.answers) {
+          throw new Error(body?.error || "Pro access could not be verified.");
+        }
+        setAnswers(body.answers);
+        saveQuizAnswers(body.answers);
+        savePaidReport({
+          sessionId: body.sessionId,
+          answers: body.answers,
+          verifiedAt: new Date().toISOString(),
+          amountTotal: body.amountTotal,
+          currency: body.currency,
+        });
+        setIsPro(true);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setIsPro(false);
+        setEntitlementError(error instanceof Error ? error.message : "Pro access could not be verified.");
+      })
+      .finally(() => setProChecking(false));
+
+    return () => controller.abort();
+  }, [purchaseSessionId]);
 
   useEffect(() => {
     if (!answers) {
-      navigate("/quiz");
+      if (!purchaseSessionId && !proChecking) {
+        navigate("/quiz", { replace: true });
+      }
       return;
     }
-    const factTimer = setInterval(() => setFactIndex((i) => (i + 1) % 8), 2000);
-    const loadTimer = setTimeout(() => {
+
+    saveQuizAnswers(answers);
+    trackEvent("report_viewed", { pro: isPro });
+
+    const factTimer = window.setInterval(() => setFactIndex((i) => (i + 1) % 8), 2000);
+    const loadTimer = window.setTimeout(() => {
       setLoading(false);
-      setShowEmailGate(true);
-    }, 3000);
-    return () => { clearInterval(factTimer); clearTimeout(loadTimer); };
-  }, [answers, navigate]);
+      if (!isPro && !loadCapturedEmail()) {
+        setShowEmailGate(true);
+      }
+    }, 900);
+
+    return () => {
+      window.clearInterval(factTimer);
+      window.clearTimeout(loadTimer);
+    };
+  }, [answers, isPro, navigate, purchaseSessionId, proChecking]);
 
   const report = useMemo(() => {
     if (!answers) return null;
     return generateReport(answers);
   }, [answers]);
 
-  const handleEmailSuccess = () => {
+  const handleEmailSuccess = (email: string) => {
+    saveCapturedEmail(email);
+    setCapturedEmail(email);
     setShowEmailGate(false);
     setEmailCaptured(true);
     trackEvent("email_captured");
   };
 
+  if (proChecking) return <ReportLoading factIndex={factIndex} />;
   if (!answers || !report) return null;
   if (loading) return <ReportLoading factIndex={factIndex} />;
-  if (showEmailGate && !emailCaptured) {
-    return <EmailCaptureModal open={true} onSuccess={handleEmailSuccess} severity={report.severity} species={report.species.name} />;
+  if (showEmailGate && !emailCaptured && !isPro) {
+    return (
+      <EmailCaptureModal
+        open={true}
+        onSuccess={handleEmailSuccess}
+        severity={report.severity}
+        species={report.species.name}
+      />
+    );
   }
 
   const handleDownloadPDF = () => {
-    trackEvent("pdf_downloaded", { severity: report.severity, species: report.species.name });
-    const doc = generatePDF(report, false);
-    doc.save("MiceGoneGuide-Premium-Elimination-Blueprint.pdf");
+    trackEvent("pdf_downloaded", {
+      severity: report.severity,
+      species: report.species.name,
+      pro: isPro,
+    });
+    const doc = generatePDF(report, isPro);
+    doc.save(isPro ? "MiceGoneGuide-Pro-Elimination-Masterplan.pdf" : "MiceGoneGuide-Free-Diagnostic-Summary.pdf");
   };
 
   const handleShare = async () => {
-    if (navigator.share) {
-      await navigator.share({
-        title: "My Mouse Problem Report — MiceGoneGuide",
-        text: `I scored ${report.severity}/10 on the MiceGoneGuide mouse infestation diagnostic. Get your free report:`,
-        url: "https://elimination.micegoneguide.com/quiz",
-      });
-    } else {
-      await navigator.clipboard.writeText("https://elimination.micegoneguide.com/quiz");
+    const shareUrl = "https://elimination.micegoneguide.com/quiz";
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "My Mouse Problem Report — MiceGoneGuide",
+          text: "Get your free MiceGoneGuide mouse infestation diagnostic:",
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+      }
+    } catch {
+      // Sharing is optional and must never interrupt the report.
     }
   };
 
@@ -80,7 +181,6 @@ export default function ReportPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
-      {/* Report Header */}
       <div className="bg-hero relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,hsl(152_45%_30%/0.3),transparent_50%)]" />
         <div className="container mx-auto px-4 py-12 md:py-16 max-w-3xl text-center relative z-10">
@@ -88,39 +188,29 @@ export default function ReportPage() {
             <div className="flex items-center justify-center gap-3 mb-5">
               <span className="trust-badge bg-primary-foreground/10 text-primary-foreground/70">
                 <Shield className="h-3 w-3" />
-                AI-Powered
+                Diagnostic analysis
               </span>
               <span className="trust-badge bg-primary-foreground/10 text-primary-foreground/70">
                 <CheckCircle2 className="h-3 w-3" />
-                Analysis Complete
+                {isPro ? "Pro access verified" : "Analysis complete"}
               </span>
             </div>
 
             <h1 className="text-3xl md:text-5xl font-display font-bold text-primary-foreground mb-3 leading-tight">
-              Your Mouse Problem Report
+              {isPro ? "Your Pro Mouse Elimination Masterplan" : "Your Mouse Problem Report"}
             </h1>
-            <p className="text-primary-foreground/50 text-sm mb-8 max-w-md mx-auto">
-              Professional-grade analysis based on your {Object.keys(answers).length} diagnostic answers
+            <p className="text-primary-foreground/60 text-sm mb-8 max-w-md mx-auto">
+              Personalized guidance based on your {Object.keys(answers).length} diagnostic answers
             </p>
 
             <div className="flex flex-wrap gap-3 justify-center">
-              <Button
-                variant="hero"
-                size="lg"
-                onClick={handleDownloadPDF}
-                className="gap-2 shadow-xl"
-              >
+              <Button variant="hero" size="lg" onClick={handleDownloadPDF} className="gap-2 shadow-xl">
                 <Download className="h-4 w-4" />
-                Download Free Blueprint PDF
+                {isPro ? "Download Pro Masterplan PDF" : "Download Free Summary PDF"}
               </Button>
-              <Button
-                variant="hero-outline"
-                size="lg"
-                onClick={handleShare}
-                className="gap-2"
-              >
+              <Button variant="hero-outline" size="lg" onClick={handleShare} className="gap-2">
                 <Share2 className="h-4 w-4" />
-                Share Report
+                Share Quiz
               </Button>
             </div>
           </motion.div>
@@ -128,6 +218,26 @@ export default function ReportPage() {
       </div>
 
       <div className="container mx-auto px-4 py-10 max-w-3xl">
+        {entitlementError && purchaseSessionId && (
+          <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 flex gap-3 items-start text-sm text-muted-foreground">
+            <XCircle className="h-5 w-5 shrink-0 text-destructive" />
+            <div>
+              <p className="font-semibold text-foreground">Pro access not verified</p>
+              <p>{entitlementError}</p>
+            </div>
+          </div>
+        )}
+
+        {checkoutCancelled && (
+          <div className="mb-6 rounded-xl border border-border bg-muted/40 px-4 py-3 flex gap-3 items-start text-sm text-muted-foreground">
+            <XCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div>
+              <p className="font-semibold text-foreground">Checkout cancelled</p>
+              <p>No payment was recorded. Your free report is still available below.</p>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-6">
           <ReportSeveritySection report={report} />
           <ReportSpeciesSection report={report} />
@@ -135,7 +245,6 @@ export default function ReportPage() {
           <ReportEntryPointsSection report={report} />
           <ReportActionsSection report={report} />
 
-          {/* Download CTA between free and premium */}
           <motion.div
             className="glass-card-elevated rounded-2xl p-8 text-center overflow-hidden relative"
             initial={{ opacity: 0, y: 20 }}
@@ -147,20 +256,27 @@ export default function ReportPage() {
               <FileText className="h-6 w-6 text-primary" />
             </div>
             <h3 className="text-lg font-display font-bold text-foreground mb-2">
-              Save Your Premium Blueprint
+              {isPro ? "Keep Your Pro Plan Offline" : "Save Your Free Diagnostic Summary"}
             </h3>
             <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">
-              Download a premium, printable elimination blueprint with your diagnostic score, species ID, likely entry points, safety protocol, tonight checklist, decision filters, and prevention planner.
+              {isPro
+                ? "Download the complete Pro masterplan, including the paid room-by-room strategy, timeline, cleanup protocol, prevention calendar, and worksheets."
+                : "Download the free diagnostic summary with your severity, likely species, entry-point priorities, immediate actions, and safety guidance."}
             </p>
             <Button variant="default" size="lg" onClick={handleDownloadPDF} className="gap-2">
               <Download className="h-4 w-4" />
-              Download Free Blueprint PDF
+              {isPro ? "Download Pro PDF" : "Download Free Summary PDF"}
             </Button>
           </motion.div>
 
-          <ReportPremiumPreview report={report} />
+          <ReportPremiumPreview
+            report={report}
+            answers={answers}
+            capturedEmail={capturedEmail}
+            isPro={isPro}
+            onDownloadPro={handleDownloadPDF}
+          />
 
-          {/* Retake */}
           <div className="text-center pt-4 pb-8">
             <Link to="/quiz">
               <Button variant="outline" className="gap-2">

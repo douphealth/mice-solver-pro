@@ -125,7 +125,7 @@ function drawCoverPage(doc: jsPDF, report: ReportData) {
     { label: "30-DAY PROJECTION", value: `${report.populationIn30Days.min}-${report.populationIn30Days.max} mice` },
   ];
 
-  let my = 178;
+  const my = 178;
   doc.setFillColor(30, 65, 42);
   doc.roundedRect(30, my, 150, 60, 5, 5, "F");
 
@@ -805,7 +805,7 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
-    doc.text("Upgrade for $9.99 -- One-Time", 105, y + 53 + 2, { align: "center" });
+    doc.text("Unlock the Pro Masterplan -- One-Time", 105, y + 53 + 2, { align: "center" });
     doc.link(55, y + 53 - 5, 100, 11, { url: "https://elimination.micegoneguide.com/quiz" });
   }
 
@@ -931,7 +931,9 @@ export function generatePDF(report: ReportData, isPro: boolean = false): jsPDF {
   }
 
 
-  drawPremiumBlueprintWorkbook(doc, report);
+  if (isPro) {
+    drawPremiumBlueprintWorkbook(doc, report);
+  }
 
   // ===== FOOTER on every page =====
   const pageCount = doc.getNumberOfPages();
