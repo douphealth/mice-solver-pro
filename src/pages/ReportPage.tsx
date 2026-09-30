@@ -58,9 +58,9 @@ export default function ReportPage() {
     return <EmailCaptureModal open={true} onSuccess={handleEmailSuccess} severity={report.severity} species={report.species.name} />;
   }
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     trackEvent("pdf_downloaded", { severity: report.severity, species: report.species.name });
-    const doc = generatePDF(report, false, answers);
+    const doc = await generatePDF(report, false, answers);
     doc.save("MiceGoneGuide-Premium-Elimination-Blueprint.pdf");
   };
 

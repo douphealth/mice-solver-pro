@@ -1,8 +1,21 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { writeFileSync } from "fs";
 import { generateReport } from "@/lib/report-generator";
 import { generatePDF } from "@/lib/pdf-generator";
 import { QuizAnswers } from "@/lib/quiz-data";
+
+// Offline: fonts must fall back to Helvetica gracefully and fast.
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new Error("offline");
+    })
+  );
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 const severeAnswers: QuizAnswers = {
   evidence: ["sighting", "droppings", "nesting", "sounds", "urine_smell", "gnaw_marks"],
@@ -41,27 +54,27 @@ const mildAnswers: QuizAnswers = {
 };
 
 describe("pdf-generator render", () => {
-  it("renders the free blueprint without errors", () => {
+  it("renders the free blueprint without errors", async () => {
     const report = generateReport(severeAnswers);
-    const doc = generatePDF(report, false, severeAnswers);
+    const doc = await generatePDF(report, false, severeAnswers);
     const pages = doc.getNumberOfPages();
     console.log("FREE pages:", pages, "| severity:", report.severity, "| species:", report.species.name);
     expect(pages).toBeGreaterThan(8);
     writeFileSync("/tmp/mice-blueprint-free.pdf", Buffer.from(doc.output("arraybuffer")));
   });
 
-  it("renders the pro masterplan without errors", () => {
+  it("renders the pro masterplan without errors", async () => {
     const report = generateReport(severeAnswers);
-    const doc = generatePDF(report, true, severeAnswers);
+    const doc = await generatePDF(report, true, severeAnswers);
     const pages = doc.getNumberOfPages();
     console.log("PRO pages:", pages);
     expect(pages).toBeGreaterThan(10);
     writeFileSync("/tmp/mice-blueprint-pro.pdf", Buffer.from(doc.output("arraybuffer")));
   });
 
-  it("renders a mild case without errors", () => {
+  it("renders a mild case without errors", async () => {
     const report = generateReport(mildAnswers);
-    const doc = generatePDF(report, false, mildAnswers);
+    const doc = await generatePDF(report, false, mildAnswers);
     const pages = doc.getNumberOfPages();
     console.log("MILD pages:", pages, "| severity:", report.severity, "| species:", report.species.name);
     expect(pages).toBeGreaterThan(8);

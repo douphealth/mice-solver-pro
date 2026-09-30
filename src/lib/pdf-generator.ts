@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import { ReportData } from "./report-generator";
 import { QuizAnswers, quizSteps } from "./quiz-data";
+import { ensurePDFFonts, PD } from "./pdf-fonts";
 
 /* ============================================================================
    MiceGoneGuide — Premium Elimination Blueprint PDF
@@ -100,16 +101,13 @@ function drawTopBar(doc: jsPDF) {
   doc.rect(0, 0, 210, 13, "F");
   doc.setFillColor(...C.gold);
   doc.rect(0, 12.6, 210, 0.6, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.muted);
-  doc.text("MICEGONEGUIDE.COM", MARGIN_L, 8);
+  trackedLeft(doc, "MICEGONEGUIDE.COM", MARGIN_L, 8, 7, C.muted, 1.2);
   doc.text("ELIMINATION BLUEPRINT", MARGIN_R, 8, { align: "right" });
 }
 
 /* ---------- typography helpers ---------- */
 function h1(doc: jsPDF, text: string, x: number, y: number, size = 19): void {
-  doc.setFont("helvetica", "bold");
+  doc.setFont(PD.family, "bold");
   doc.setFontSize(size);
   doc.setTextColor(...C.forest);
   doc.text(sanitize(text), x, y);
@@ -237,7 +235,7 @@ function ribbon(
 /** Giant ghost numeral (e.g. "01") anchored near the bottom of an art page. */
 function ghostNumeral(doc: jsPDF, num: string, color: RGB, opacity: number): void {
   ghost(doc, opacity, () => {
-    doc.setFont("helvetica", "bold");
+    doc.setFont(PD.family, "bold");
     doc.setFontSize(128);
     doc.setTextColor(...color);
     doc.text(num, 201, 272, { align: "right" });
@@ -275,7 +273,7 @@ function dropCapPara(
   const first = clean.charAt(0);
   const rest = clean.slice(1);
   const capSize = size * 2.2;
-  doc.setFont("helvetica", "bold");
+  doc.setFont(PD.family, "bold");
   doc.setFontSize(capSize);
   doc.setTextColor(...C.forest);
   // cap top aligns with the first line's cap top; baseline follows from cap height
@@ -313,6 +311,120 @@ function goldDivider(doc: jsPDF, y: number, x0 = MARGIN_L + 30, x1 = MARGIN_R - 
   doc.line(mid + 7, y, x1, y);
   diamond(doc, mid, y, 2.6, C.gold);
   return y + 6;
+}
+
+/* ---------- artist helpers: tracked type, glow, blueprint grid, pull quotes ---------- */
+
+/** Centered letterspaced display line — true tracking, drawn char by char. */
+function tracked(
+  doc: jsPDF,
+  text: string,
+  cx: number,
+  y: number,
+  size: number,
+  color: RGB,
+  tracking = 1.1,
+  style: "normal" | "bold" = "bold"
+): void {
+  const clean = sanitize(text);
+  doc.setFont(PD.family, style);
+  doc.setFontSize(size);
+  doc.setTextColor(...color);
+  const chars = [...clean];
+  const widths = chars.map((ch) => doc.getTextWidth(ch));
+  const total = widths.reduce((a, b) => a + b, 0) + tracking * (chars.length - 1);
+  let x = cx - total / 2;
+  chars.forEach((ch, i) => {
+    doc.text(ch, x, y);
+    x += widths[i] + tracking;
+  });
+}
+
+/** Left-aligned letterspaced line. */
+function trackedLeft(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  size: number,
+  color: RGB,
+  tracking = 0.9,
+  style: "normal" | "bold" = "bold"
+): void {
+  const clean = sanitize(text);
+  doc.setFont(PD.family, style);
+  doc.setFontSize(size);
+  doc.setTextColor(...color);
+  let cx = x;
+  for (const ch of [...clean]) {
+    doc.text(ch, cx, y);
+    cx += doc.getTextWidth(ch) + tracking;
+  }
+}
+
+/** Soft radial glow: layered circles fading outward — depth behind titles. */
+function glow(doc: jsPDF, cx: number, cy: number, r: number, color: RGB, maxOp = 0.14): void {
+  const steps = 14;
+  for (let i = steps; i >= 1; i--) {
+    glowCircle(doc, cx, cy, (r * i) / steps, color, (maxOp * i) / steps);
+  }
+}
+function glowCircle(doc: jsPDF, cx: number, cy: number, r: number, color: RGB, op: number): void {
+  ghost(doc, op, () => {
+    doc.setFillColor(...color);
+    doc.circle(cx, cy, r, "F");
+  });
+}
+
+/** Faint architectural grid for workbook pages — the "blueprint" motif. */
+function blueprintGrid(doc: jsPDF): void {
+  ghost(doc, 0.055, () => {
+    doc.setDrawColor(...C.gold);
+    doc.setLineWidth(0.15);
+    for (let x = 10; x <= 200; x += 10) doc.line(x, 14, x, 286);
+    for (let y = 14; y <= 286; y += 10) doc.line(10, y, 200, y);
+  });
+}
+
+/** Editorial pull quote: oversized serif italic with gold rule. Returns new y. */
+function pullQuote(doc: jsPDF, y: number, text: string, cite: string): number {
+  const size = 12.5;
+  doc.setFont(PD.family, "italic");
+  doc.setFontSize(size);
+  doc.setTextColor(...C.forest);
+  const lines = doc.splitTextToSize(sanitize(text), CONTENT_W - 30);
+  const h = lines.length * size * 0.58 + 18;
+  y = checkPage(doc, y, h + 6);
+  // oversized quotation mark
+  doc.setFont(PD.family, "bold");
+  doc.setFontSize(46);
+  doc.setTextColor(...C.gold);
+  doc.text('"', MARGIN_L + 1, y + 14);
+  doc.setFont(PD.family, "italic");
+  doc.setFontSize(size);
+  doc.setTextColor(...C.forest);
+  doc.text(lines, MARGIN_L + 17, y + 8);
+  const qy = y + 8 + (lines.length - 1) * size * 0.58;
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_L + 17, qy + 6, MARGIN_L + 67, qy + 6);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.muted);
+  doc.text(sanitize(cite).toUpperCase(), MARGIN_L + 17, qy + 11.5);
+  return qy + 18;
+}
+
+/** Section end-mark: hairline rules + diamond ornament. Returns new y. */
+function endMark(doc: jsPDF, y: number): number {
+  y = checkPage(doc, y, 16);
+  doc.setDrawColor(...C.line);
+  doc.setLineWidth(0.4);
+  const mid = 105;
+  doc.line(mid - 34, y + 3, mid - 8, y + 3);
+  doc.line(mid + 8, y + 3, mid + 34, y + 3);
+  diamond(doc, mid, y + 3, 2.2, C.gold);
+  return y + 12;
 }
 
 /** Donut gauge: dotted arc in zone colors, needle, score medallion below. */
@@ -460,10 +572,10 @@ function sectionHeader(
   doc.roundedRect(MARGIN_L, y, CONTENT_W, h, 2.5, 2.5, "F");
   doc.setFillColor(...C.gold);
   doc.roundedRect(MARGIN_L, y, 4, h, 1.2, 1.2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
+  doc.setFont(PD.family, "bold");
+  doc.setFontSize(10);
   doc.setTextColor(...C.gold);
-  doc.text(num, MARGIN_L + 8, y + 7.4);
+  doc.text(num, MARGIN_L + 8, y + 7.6);
   const numW = doc.getTextWidth(num);
   doc.setTextColor(...C.white);
   doc.text(sanitize(title).toUpperCase(), MARGIN_L + 8 + numW + 4, y + 7.4);
@@ -485,16 +597,14 @@ function chapterDivider(
   markArtPage(doc);
   coverArt(doc);
   ghostNumeral(doc, num, C.gold, 0.14);
+  glow(doc, 105, 118, 46, C.gold, 0.08);
 
-  // eyebrow
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...C.gold);
-  doc.text(`S E C T I O N   ${num}`, 105, 78, { align: "center" });
+  // eyebrow — letterspaced
+  tracked(doc, `SECTION ${num}`, 105, 78, 9, C.gold, 2.6);
 
-  // title
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(30);
+  // title — Playfair display serif
+  doc.setFont(PD.family, "bold");
+  doc.setFontSize(31);
   doc.setTextColor(...C.white);
   const lines = doc.splitTextToSize(sanitize(title).toUpperCase(), 160);
   doc.text(lines, 105, 104, { align: "center" });
@@ -516,10 +626,7 @@ function chapterDivider(
   doc.text(tl, 105, ry + 16, { align: "center" });
 
   // page hint
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.gold);
-  doc.text("TURN THE PAGE  >>", 105, 258, { align: "center" });
+  tracked(doc, "TURN THE PAGE >>", 105, 258, 7.5, C.gold, 1.6);
 
   tocEntries.push({ num, title: sanitize(title), page: doc.getNumberOfPages(), tocY: 0 });
 }
@@ -552,27 +659,30 @@ function drawCover(doc: jsPDF, report: ReportData): void {
   coverArt(doc);
   markArtPage(doc);
 
-  // Eyebrow
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...C.gold);
-  doc.text("M I C E G O N E G U I D E . C O M", 105, 34, { align: "center" });
+  // Artist depth: radial glow + giant ghost "M" watermark behind the title
+  glow(doc, 105, 82, 52, C.gold, 0.10);
+  ghost(doc, 0.055, () => {
+    doc.setFont(PD.family, "bold");
+    doc.setFontSize(150);
+    doc.setTextColor(...C.gold);
+    doc.text("M", 105, 132, { align: "center" });
+  });
+
+  // Eyebrow — true letterspaced tracking
+  tracked(doc, "MICEGONEGUIDE.COM", 105, 34, 9, C.gold, 2.4);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(168, 196, 178);
   doc.text("Professional Rodent Elimination Intelligence", 105, 41, { align: "center" });
 
-  // Editorial title block
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.setTextColor(168, 196, 178);
-  doc.text("THE PERSONALIZED", 105, 66, { align: "center" });
-  doc.setFontSize(37);
+  // Editorial title block — Playfair display serif
+  tracked(doc, "THE PERSONALIZED", 105, 66, 12.5, [168, 196, 178], 3.4);
+  doc.setFont(PD.family, "bold");
+  doc.setFontSize(40);
   doc.setTextColor(...C.white);
-  doc.text("MOUSE ELIMINATION", 105, 84, { align: "center" });
-  doc.setFontSize(37);
+  doc.text("MOUSE ELIMINATION", 105, 85, { align: "center" });
   doc.setTextColor(...C.gold);
-  doc.text("BLUEPRINT", 105, 100, { align: "center" });
+  doc.text("BLUEPRINT", 105, 102, { align: "center" });
 
   // gold rule + diamond
   const ry = 110;
@@ -605,10 +715,7 @@ function drawCover(doc: jsPDF, report: ReportData): void {
   doc.text(`${report.severity}/10`, mcx, mcy - 0.5, { align: "center" });
   doc.setFontSize(8);
   doc.text(sanitize(report.severityLabel).toUpperCase(), mcx, mcy + 8, { align: "center" });
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.gold);
-  doc.text("INFESTATION SEVERITY", mcx, mcy + 30, { align: "center" });
+  tracked(doc, "INFESTATION SEVERITY", mcx, mcy + 30, 7.5, C.gold, 1.8);
 
   // Stat strip with hairline dividers
   const stats = [
@@ -1047,12 +1154,13 @@ function drawSeverity(doc: jsPDF, report: ReportData): void {
   doc.text("Mice can reproduce every 19-21 days. Early action prevents exponential growth.", MARGIN_L + 9, y + 11.5);
   y += uh + 6;
 
-  y = factCallout(
+  y = pullQuote(
     doc,
     y,
     "Mice can squeeze through openings as small as 1/4 inch (6 mm) -- about the width of a pencil. Sealing entry points matters as much as trapping.",
     "U.S. CDC, Integrated Pest Management Guidance"
   );
+  y = endMark(doc, y);
 }
 
 /* ============================================================================
@@ -1097,12 +1205,13 @@ function drawSpecies(doc: jsPDF, report: ReportData): void {
     y = infoCard(doc, y, k, accent, v, accent);
   }
 
-  y = factCallout(
+  y = pullQuote(
     doc,
     y,
     "Knowing the species changes trap placement: house mice hug walls near food, roof rats run high along rafters, and Norway rats burrow low near foundations. Place traps on the routes your species actually travels.",
     "MiceGoneGuide species behavior database"
   );
+  y = endMark(doc, y);
 }
 
 /* ============================================================================
@@ -1161,12 +1270,13 @@ function drawHealth(doc: jsPDF, report: ReportData): void {
     y += h + 3.5;
   }
 
-  y = factCallout(
+  y = pullQuote(
     doc,
     y,
     "Mouse droppings, urine, and saliva can transmit Hantavirus, Salmonella, and LCMV. Children, pregnant people, and anyone with asthma face higher risk -- keep them out of active cleanup zones.",
     "U.S. CDC, Rodent-Borne Disease Prevention"
   );
+  y = endMark(doc, y);
 }
 
 /* ============================================================================
@@ -1368,6 +1478,7 @@ function drawActions(doc: jsPDF, report: ReportData): void {
     "CDC advises against glue traps and live traps. Snap traps placed in a T against the baseboard -- trigger touching the wall -- catch more mice with fewer misses.",
     "U.S. CDC, Trap Up Guidance"
   );
+  y = endMark(doc, y);
 }
 
 /* ============================================================================
@@ -1724,6 +1835,7 @@ function drawWorkbook(doc: jsPDF, report: ReportData): void {
   // W1 — blueprint intro
   doc.addPage();
   drawTopBar(doc);
+  blueprintGrid(doc);
   let y = 24;
   y = sectionHeader(doc, "W1", "Premium Elimination Blueprint", y);
   y = bodyText(
@@ -1743,6 +1855,7 @@ function drawWorkbook(doc: jsPDF, report: ReportData): void {
   // W2 — decision filter
   doc.addPage();
   drawTopBar(doc);
+  blueprintGrid(doc);
   y = 24;
   y = sectionHeader(doc, "W2", "Decision Filter: What To Do First", y);
   const filters: [string, string, RGB][] = [
@@ -1759,6 +1872,7 @@ function drawWorkbook(doc: jsPDF, report: ReportData): void {
   // W3 — entry-point audit
   doc.addPage();
   drawTopBar(doc);
+  blueprintGrid(doc);
   y = 24;
   y = sectionHeader(doc, "W3", "Entry-Point Audit Worksheet", y);
   y = bodyText(
@@ -1783,6 +1897,7 @@ function drawWorkbook(doc: jsPDF, report: ReportData): void {
   // W4 — 30-day map
   doc.addPage();
   drawTopBar(doc);
+  blueprintGrid(doc);
   y = 24;
   y = sectionHeader(doc, "W4", "30-Day Elimination Map", y);
   const weeks: [string, string, RGB][] = [
@@ -1807,6 +1922,7 @@ function drawWorkbook(doc: jsPDF, report: ReportData): void {
   // W5 — tracking log
   doc.addPage();
   drawTopBar(doc);
+  blueprintGrid(doc);
   y = 24;
   y = sectionHeader(doc, "W5", "Printable Tracking Log", y);
   y = bodyText(
@@ -1939,6 +2055,13 @@ function drawFooters(doc: jsPDF, skipPages: Set<number>): void {
     doc.setFontSize(6.8);
     doc.setTextColor(175, 198, 183);
     doc.text("MiceGoneGuide.com -- Mouse Elimination Blueprint", MARGIN_L, 293.6);
+    doc.setFont(PD.family, "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.gold);
+    doc.text(`-- ${i} --`, 105, 293.8, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.setTextColor(175, 198, 183);
     doc.text(`Page ${i} of ${total}`, MARGIN_R, 293.6, { align: "right" });
     doc.link(MARGIN_L, 288.5, 110, 8, { url: "https://micegoneguide.com" });
   }
@@ -1947,16 +2070,19 @@ function drawFooters(doc: jsPDF, skipPages: Set<number>): void {
 /* ============================================================================
    MAIN ENTRY
    ============================================================================ */
-export function generatePDF(
+export async function generatePDF(
   report: ReportData,
   isPro = false,
   answers?: QuizAnswers
-): jsPDF {
+): Promise<jsPDF> {
   tocEntries = [];
   tocPageNum = 0;
   artPages = new Set<number>();
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  // Display typography: Playfair Display when the font files load,
+  // graceful Helvetica fallback otherwise (tests, offline).
+  await ensurePDFFonts(doc).catch(() => false);
   doc.setProperties({
     title: "Mouse Elimination Blueprint -- MiceGoneGuide",
     author: "MiceGoneGuide.com",
