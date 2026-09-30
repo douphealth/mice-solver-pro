@@ -55,6 +55,8 @@ function sanitize(text: string): string {
     .replace(/[\u{1F900}-\u{1F9FF}]/gu, "")
     .replace(/[\u{1FA00}-\u{1FA6F}]/gu, "")
     .replace(/[\u{1FA70}-\u{1FAFF}]/gu, "")
+    .replace(/\u2192/g, ">>")
+    .replace(/\u2190/g, "<<")
     .replace(/\u2014/g, "--")
     .replace(/\u2013/g, "-")
     .replace(/\u2018|\u2019/g, "'")
@@ -150,6 +152,204 @@ function wrapLines(
   return doc.splitTextToSize(sanitize(text), maxW);
 }
 
+/* ============================================================================
+   GALLERY-EDITION ART SYSTEM
+   Layered vector art for full-bleed pages: ghost rings, dot fields, ribbons,
+   ghost numerals. All WinAnsi-safe, print-friendly.
+   ============================================================================ */
+
+/** Track pages that carry full-bleed art so footers skip them. */
+let artPages = new Set<number>();
+function markArtPage(doc: jsPDF): void {
+  artPages.add(doc.getNumberOfPages());
+}
+
+function ghost(doc: jsPDF, opacity: number, fn: () => void): void {
+  type G = { GState: new (o: object) => object; setGState: (g: object) => void };
+  const api = doc as unknown as G;
+  // PDF has separate fill vs stroke alpha — set both or stroked art stays solid
+  api.setGState(new api.GState({ opacity, "stroke-opacity": opacity }));
+  fn();
+  api.setGState(new api.GState({ opacity: 1, "stroke-opacity": 1 }));
+}
+
+/** Concentric ring arcs radiating from a corner point — topographic feel. */
+function ringField(
+  doc: jsPDF,
+  cx: number,
+  cy: number,
+  rings: number,
+  step: number,
+  color: RGB,
+  opacity: number
+): void {
+  ghost(doc, opacity, () => {
+    doc.setDrawColor(...color);
+    for (let i = 1; i <= rings; i++) {
+      doc.setLineWidth(i % 5 === 0 ? 0.55 : 0.28);
+      doc.circle(cx, cy, i * step, "D");
+    }
+  });
+}
+
+/** Subtle dot grid over a region. */
+function dotField(
+  doc: jsPDF,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  gap: number,
+  r: number,
+  color: RGB,
+  opacity: number
+): void {
+  ghost(doc, opacity, () => {
+    doc.setFillColor(...color);
+    for (let x = x0; x <= x1; x += gap) {
+      for (let y = y0; y <= y1; y += gap) {
+        doc.circle(x, y, r, "F");
+      }
+    }
+  });
+}
+
+/** Diagonal gold ribbon sweeping across the page. */
+function ribbon(
+  doc: jsPDF,
+  yBase: number,
+  thickness: number,
+  color: RGB,
+  opacity: number
+): void {
+  ghost(doc, opacity, () => {
+    doc.setFillColor(...color);
+    // parallelogram: enters left edge below yBase, exits right edge above
+    const ax = 0;
+    const ay = yBase + 46;
+    const bx = 210;
+    const by = yBase - 30;
+    doc.triangle(ax, ay, bx, by, bx, by + thickness, "F");
+    doc.triangle(ax, ay, bx, by + thickness, ax, ay + thickness, "F");
+  });
+}
+
+/** Giant ghost numeral (e.g. "01") anchored near the bottom of an art page. */
+function ghostNumeral(doc: jsPDF, num: string, color: RGB, opacity: number): void {
+  ghost(doc, opacity, () => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(128);
+    doc.setTextColor(...color);
+    doc.text(num, 201, 272, { align: "right" });
+  });
+}
+
+/** The signature full-bleed art backdrop used by cover, dividers, closing. */
+function coverArt(doc: jsPDF): void {
+  doc.setFillColor(...C.forestDeep);
+  doc.rect(0, 0, 210, 297, "F");
+  // topographic rings from top-right, dot field bottom-left, gold ribbon sweep
+  ringField(doc, 218, -14, 10, 13, C.gold, 0.10);
+  dotField(doc, 8, 208, 120, 290, 9, 0.55, C.gold, 0.10);
+  ribbon(doc, 150, 7, C.gold, 0.10);
+  ribbon(doc, 162, 1.6, C.gold, 0.28);
+  // hairline frame
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(0.9);
+  doc.rect(11, 11, 188, 275, "D");
+  doc.setDrawColor(...C.goldDeep);
+  doc.setLineWidth(0.3);
+  doc.rect(14.5, 14.5, 181, 268, "D");
+}
+
+/** Editorial drop-cap paragraph: oversized first letter spanning ~3 lines. */
+function dropCapPara(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  maxW: number,
+  size = 9.2
+): number {
+  const clean = sanitize(text);
+  const first = clean.charAt(0);
+  const rest = clean.slice(1);
+  const capSize = size * 2.2;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(capSize);
+  doc.setTextColor(...C.forest);
+  // cap top aligns with the first line's cap top; baseline follows from cap height
+  const capTop = y - size * 0.72;
+  doc.text(first, x, capTop + capSize * 0.72);
+  const indent = doc.getTextWidth(first) + 2.4;
+  const lineH = size * 0.52;
+  const firstLines = wrapLines(doc, rest, maxW - indent, size, "normal");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(size);
+  doc.setTextColor(...C.body);
+  const indentedCount = Math.min(3, firstLines.length);
+  doc.text(firstLines.slice(0, indentedCount), x + indent, y);
+  const tail = firstLines.slice(indentedCount);
+  if (tail.length > 0) {
+    const tailLines = wrapLines(doc, tail.join(" "), maxW, size, "normal");
+    doc.text(tailLines, x, y + indentedCount * lineH);
+    return y + indentedCount * lineH + tailLines.length * lineH + 3;
+  }
+  return y + indentedCount * lineH + 3;
+}
+
+/** Small filled diamond marker (drawn as two triangles). */
+function diamond(doc: jsPDF, cx: number, cy: number, s: number, color: RGB): void {
+  doc.setFillColor(...color);
+  doc.triangle(cx - s, cy, cx, cy - s, cx + s, cy, "F");
+  doc.triangle(cx - s, cy, cx + s, cy, cx, cy + s, "F");
+}
+
+/** Gold rule with a center diamond — section ornament for content pages. */
+function goldDivider(doc: jsPDF, y: number, x0 = MARGIN_L + 30, x1 = MARGIN_R - 30): number {  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(0.7);
+  const mid = (x0 + x1) / 2;
+  doc.line(x0, y, mid - 7, y);
+  doc.line(mid + 7, y, x1, y);
+  diamond(doc, mid, y, 2.6, C.gold);
+  return y + 6;
+}
+
+/** Donut gauge: dotted arc in zone colors, needle, score medallion below. */
+function donutGauge(doc: jsPDF, cx: number, cy: number, r: number, score: number): void {
+  const dots = 72;
+  for (let i = 0; i < dots; i++) {
+    // semicircle from 180deg (left) to 0deg (right), over the top
+    const ang = Math.PI - (i / (dots - 1)) * Math.PI;
+    const x = cx + r * Math.cos(ang);
+    const y = cy - r * Math.sin(ang);
+    const seg = Math.round(((Math.PI - ang) / Math.PI) * 10);
+    const zone: RGB = seg <= 3 ? C.ok : seg <= 7 ? C.warn : C.danger;
+    const filled = seg <= score && seg >= 1;
+    doc.setFillColor(...(filled ? zone : C.line));
+    doc.circle(x, y, filled ? 2.5 : 1.7, "F");
+  }
+  // needle
+  const sc = severityColor(score);
+  const nAng = Math.PI - (Math.max(1, Math.min(10, score)) / 10) * Math.PI;
+  doc.setDrawColor(...sc.fg);
+  doc.setLineWidth(1.6);
+  doc.line(cx, cy, cx + (r - 7) * Math.cos(nAng), cy - (r - 7) * Math.sin(nAng));
+  doc.setFillColor(...sc.fg);
+  doc.circle(cx, cy, 3, "F");
+  // score medallion, clear of the arc
+  const my = cy + r + 15;
+  doc.setFillColor(...C.white);
+  doc.circle(cx, my, 11, "F");
+  doc.setDrawColor(...sc.fg);
+  doc.setLineWidth(1.2);
+  doc.circle(cx, my, 11, "D");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11.5);
+  doc.setTextColor(...sc.fg);
+  doc.text(`${score}/10`, cx, my + 4, { align: "center" });
+}
+
 /* ---------- cards & callouts ---------- */
 interface CardOpts {
   bg?: RGB;
@@ -206,16 +406,22 @@ function infoCard(
 }
 
 function factCallout(doc: jsPDF, y: number, fact: string, source: string): number {
-  const lines = wrapLines(doc, fact, CONTENT_W - 18, 8.6);
-  const h = lines.length * 4.3 + 14;
+  const lines = wrapLines(doc, fact, CONTENT_W - 24, 8.6);
+  const h = lines.length * 4.3 + 16;
   y = checkPage(doc, y, h + 4);
   card(doc, y, h, { bg: C.blueBg, border: C.blue, accent: C.blue });
-  label(doc, "Verified fact", MARGIN_L + 9, y + 6.5, C.blue, 7);
-  doc.setFont("helvetica", "normal");
+  // oversized decorative quotation mark
+  ghost(doc, 0.16, () => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(44);
+    doc.setTextColor(...C.blue);
+    doc.text('"', MARGIN_L + 9, y + 19);
+  });
+  label(doc, "Verified fact", MARGIN_L + 18, y + 6.5, C.blue, 7);
+  doc.setFont("helvetica", "italic");
   doc.setFontSize(8.6);
   doc.setTextColor(...C.body);
-  doc.text(lines, MARGIN_L + 9, y + 11.5);
-  doc.setFont("helvetica", "italic");
+  doc.text(lines, MARGIN_L + 18, y + 12);
   doc.setFontSize(6.8);
   doc.setTextColor(...C.muted);
   doc.text(`Source: ${sanitize(source)}`, MARGIN_R - 6, y + h - 3.5, { align: "right" });
@@ -241,7 +447,13 @@ function addLink(doc: jsPDF, text: string, url: string, x: number, y: number, si
 }
 
 /* ---------- section header (records TOC entry) ---------- */
-function sectionHeader(doc: jsPDF, num: string, title: string, y: number): number {
+function sectionHeader(
+  doc: jsPDF,
+  num: string,
+  title: string,
+  y: number,
+  registerToc = true
+): number {
   y = checkPage(doc, y, 22);
   const h = 11;
   doc.setFillColor(...C.forest);
@@ -255,8 +467,61 @@ function sectionHeader(doc: jsPDF, num: string, title: string, y: number): numbe
   const numW = doc.getTextWidth(num);
   doc.setTextColor(...C.white);
   doc.text(sanitize(title).toUpperCase(), MARGIN_L + 8 + numW + 4, y + 7.4);
-  tocEntries.push({ num, title: sanitize(title), page: doc.getNumberOfPages(), tocY: 0 });
+  if (registerToc) {
+    tocEntries.push({ num, title: sanitize(title), page: doc.getNumberOfPages(), tocY: 0 });
+  }
   return y + h + 6;
+}
+
+/* Full-bleed chapter opener: ghost numeral, gold rule, title, teaser.
+   Registers its own TOC entry so contents point at the chapter start. */
+function chapterDivider(
+  doc: jsPDF,
+  num: string,
+  title: string,
+  teaser: string
+): void {
+  doc.addPage();
+  markArtPage(doc);
+  coverArt(doc);
+  ghostNumeral(doc, num, C.gold, 0.14);
+
+  // eyebrow
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.gold);
+  doc.text(`S E C T I O N   ${num}`, 105, 78, { align: "center" });
+
+  // title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(30);
+  doc.setTextColor(...C.white);
+  const lines = doc.splitTextToSize(sanitize(title).toUpperCase(), 160);
+  doc.text(lines, 105, 104, { align: "center" });
+  const titleBottom = 104 + (lines.length - 1) * 13;
+
+  // gold rule + diamond
+  const ry = titleBottom + 14;
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(1);
+  doc.line(60, ry, 96, ry);
+  doc.line(114, ry, 150, ry);
+  diamond(doc, 105, ry, 3, C.gold);
+
+  // teaser
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(190, 208, 194);
+  const tl = doc.splitTextToSize(sanitize(teaser), 130);
+  doc.text(tl, 105, ry + 16, { align: "center" });
+
+  // page hint
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gold);
+  doc.text("TURN THE PAGE  >>", 105, 258, { align: "center" });
+
+  tocEntries.push({ num, title: sanitize(title), page: doc.getNumberOfPages(), tocY: 0 });
 }
 
 /* ---------- quiz answer labels for the diagnostic snapshot ---------- */
@@ -284,88 +549,88 @@ function lookupLabels(answers: QuizAnswers, stepId: string, labels: Map<string, 
    COVER
    ============================================================================ */
 function drawCover(doc: jsPDF, report: ReportData): void {
-  doc.setFillColor(...C.forestDeep);
-  doc.rect(0, 0, 210, 297, "F");
-
-  // Double gold frame
-  doc.setDrawColor(...C.gold);
-  doc.setLineWidth(0.9);
-  doc.rect(11, 11, 188, 275, "D");
-  doc.setDrawColor(...C.goldDeep);
-  doc.setLineWidth(0.3);
-  doc.rect(14.5, 14.5, 181, 268, "D");
+  coverArt(doc);
+  markArtPage(doc);
 
   // Eyebrow
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...C.gold);
-  doc.text("M I C E G O N E G U I D E . C O M", 105, 38, { align: "center" });
+  doc.text("M I C E G O N E G U I D E . C O M", 105, 34, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(168, 196, 178);
-  doc.text("Professional Rodent Elimination Intelligence", 105, 45, { align: "center" });
+  doc.text("Professional Rodent Elimination Intelligence", 105, 41, { align: "center" });
 
-  // Title block
+  // Editorial title block
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(34);
+  doc.setFontSize(15);
+  doc.setTextColor(168, 196, 178);
+  doc.text("THE PERSONALIZED", 105, 66, { align: "center" });
+  doc.setFontSize(37);
   doc.setTextColor(...C.white);
-  doc.text("MOUSE ELIMINATION", 105, 92, { align: "center" });
+  doc.text("MOUSE ELIMINATION", 105, 84, { align: "center" });
+  doc.setFontSize(37);
   doc.setTextColor(...C.gold);
-  doc.text("BLUEPRINT", 105, 110, { align: "center" });
+  doc.text("BLUEPRINT", 105, 100, { align: "center" });
 
+  // gold rule + diamond
+  const ry = 110;
   doc.setDrawColor(...C.gold);
   doc.setLineWidth(1);
-  doc.line(78, 120, 132, 120);
+  doc.line(70, ry, 97, ry);
+  doc.line(113, ry, 140, ry);
+  diamond(doc, 105, ry, 2.8, C.gold);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(190, 210, 195);
-  doc.text("Your personalized diagnostic report,", 105, 132, { align: "center" });
-  doc.text("safety plan & action workbook", 105, 139, { align: "center" });
+  doc.text("Your diagnostic report, safety plan & action workbook --", 105, 122, { align: "center" });
+  doc.text("built from your answers, ready to work tonight.", 105, 129, { align: "center" });
 
-  // Severity badge
+  // Severity medallion
   const sc = severityColor(report.severity);
-  const badgeW = 104;
+  const mcx = 105;
+  const mcy = 152;
+  doc.setDrawColor(...C.gold);
+  doc.setLineWidth(1.4);
+  doc.circle(mcx, mcy, 24, "D");
+  doc.setLineWidth(0.5);
+  doc.circle(mcx, mcy, 20.5, "D");
   doc.setFillColor(...sc.fg);
-  doc.roundedRect(105 - badgeW / 2, 150, badgeW, 20, 10, 10, "F");
+  doc.circle(mcx, mcy, 18.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
+  doc.setFontSize(15);
   doc.setTextColor(...C.white);
-  doc.text(
-    `SEVERITY ${report.severity}/10  -  ${sanitize(report.severityLabel).toUpperCase()}`,
-    105,
-    162.5,
-    { align: "center" }
-  );
+  doc.text(`${report.severity}/10`, mcx, mcy - 0.5, { align: "center" });
+  doc.setFontSize(8);
+  doc.text(sanitize(report.severityLabel).toUpperCase(), mcx, mcy + 8, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gold);
+  doc.text("INFESTATION SEVERITY", mcx, mcy + 30, { align: "center" });
 
-  // Stat panel
-  const px = 33;
-  const py = 180;
-  const pw = 144;
-  const ph = 56;
-  doc.setFillColor(24, 58, 37);
-  doc.setDrawColor(...C.goldDeep);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(px, py, pw, ph, 4, 4, "FD");
-
+  // Stat strip with hairline dividers
   const stats = [
     { k: "LIKELY SPECIES", v: sanitize(report.species.name) },
-    { k: "EST. POPULATION", v: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max} mice` },
+    { k: "EST. POPULATION", v: `${report.estimatedPopulation.min}-${report.estimatedPopulation.max}` },
     { k: "ACT WITHIN", v: `${report.urgencyDays} days` },
-    { k: "30-DAY PROJECTION", v: `${report.populationIn30Days.min}-${report.populationIn30Days.max} mice` },
+    { k: "30-DAY PROJECTION", v: `${report.populationIn30Days.min}-${report.populationIn30Days.max}` },
   ];
+  const sy = 200;
+  const colW = 168 / 4;
+  doc.setDrawColor(70, 100, 80);
+  doc.setLineWidth(0.4);
   stats.forEach((s, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
-    const sx = px + 10 + col * 70;
-    const sy = py + 13 + row * 25;
+    const cx = 21 + colW * i + colW / 2;
+    if (i > 0) doc.line(21 + colW * i, sy - 4, 21 + colW * i, sy + 20);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.5);
-    doc.setTextColor(150, 182, 162);
-    doc.text(s.k, sx, sy);
-    doc.setFontSize(11.5);
+    doc.setTextColor(...C.gold);
+    doc.text(s.k, cx, sy, { align: "center" });
+    doc.setFontSize(12);
     doc.setTextColor(...C.white);
-    doc.text(s.v, sx, sy + 8);
+    doc.text(s.v, cx, sy + 10, { align: "center" });
   });
 
   // Trust ribbons
@@ -377,11 +642,11 @@ function drawCover(doc: jsPDF, report: ReportData): void {
   ribbons.forEach((r) => {
     doc.setDrawColor(...C.gold);
     doc.setLineWidth(0.5);
-    doc.roundedRect(rx, 246, rw, 9, 4.5, 4.5, "D");
+    doc.roundedRect(rx, 240, rw, 9, 4.5, 4.5, "D");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.5);
     doc.setTextColor(...C.gold);
-    doc.text(r, rx + rw / 2, 252, { align: "center" });
+    doc.text(r, rx + rw / 2, 246, { align: "center" });
     rx += rw + gap;
   });
 
@@ -395,13 +660,13 @@ function drawCover(doc: jsPDF, report: ReportData): void {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(140, 170, 150);
-  doc.text(`Report generated: ${dateStr}`, 105, 264, { align: "center" });
+  doc.text(`Report generated: ${dateStr}`, 105, 260, { align: "center" });
   doc.setFontSize(6.5);
   doc.setTextColor(105, 138, 118);
   doc.text(
     "For informational purposes. For severe infestations, consult a licensed professional.",
     105,
-    271,
+    267,
     { align: "center" }
   );
 
@@ -423,7 +688,7 @@ function drawExecutiveSummary(doc: jsPDF, report: ReportData): void {
   doc.line(MARGIN_L, y + 3.5, MARGIN_L + 58, y + 3.5);
   y += 13;
 
-  y = bodyText(
+  y = dropCapPara(
     doc,
     `Based on your diagnostic answers, our analysis identified a ${sanitize(report.severityLabel).toLowerCase()} situation involving the ${sanitize(report.species.name)}. This blueprint turns that diagnosis into a practical plan: what to do tonight, how to seal entry points this week, and how to prove the problem is gone within 30 days.`,
     MARGIN_L,
@@ -467,7 +732,8 @@ function drawExecutiveSummary(doc: jsPDF, report: ReportData): void {
   );
 
   // How to use this report
-  y = checkPage(doc, y, 40);
+  y = checkPage(doc, y, 46);
+  y = goldDivider(doc, y + 2);
   h1(doc, "How to use this blueprint", MARGIN_L, y, 12);
   y += 8;
   const steps = [
@@ -709,50 +975,33 @@ function fillTOC(doc: jsPDF): void {
 /* ============================================================================
    01 — SEVERITY
    ============================================================================ */
-function drawSeverityBar(doc: jsPDF, y: number, score: number): number {
-  const x = MARGIN_L;
-  const w = CONTENT_W;
-  const segW = (w - 18) / 10;
-  const sc = severityColor(score);
-  for (let i = 0; i < 10; i++) {
-    const c = i < 3 ? C.ok : i < 7 ? C.warn : C.danger;
-    doc.setFillColor(...(i < score ? c : [236, 234, 228] as RGB));
-    const sx = x + i * (segW + 2);
-    doc.roundedRect(sx, y, segW, 11, 2, 2, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...(i < score ? C.white : C.muted));
-    doc.text(String(i + 1), sx + segW / 2, y + 7.4, { align: "center" });
-  }
-  // Marker triangle above the user's score
-  const mx = x + (score - 1) * (segW + 2) + segW / 2;
-  doc.setFillColor(...sc.fg);
-  doc.triangle(mx - 3, y - 1.5, mx + 3, y - 1.5, mx, y + 2.5, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.8);
-  doc.setTextColor(...sc.fg);
-  doc.text("YOU", mx, y - 3.5, { align: "center" });
-
-  doc.setFontSize(7);
-  doc.setTextColor(...C.ok);
-  doc.text("LOW", x, y + 17.5);
-  doc.setTextColor(...C.warn);
-  doc.text("MODERATE", x + w / 2, y + 17.5, { align: "center" });
-  doc.setTextColor(...C.danger);
-  doc.text("SEVERE", x + w, y + 17.5, { align: "right" });
-  return y + 24;
-}
-
 function drawSeverity(doc: jsPDF, report: ReportData): void {
+  chapterDivider(doc, "01", "Infestation Severity Analysis", "How bad it is, what the number means, and how fast it grows.");
   doc.addPage();
   drawTopBar(doc);
   let y = 24;
-  y = sectionHeader(doc, "01", "Infestation Severity Analysis", y);
+  y = sectionHeader(doc, "01", "Infestation Severity Analysis", y, false);
 
   y = checkPage(doc, y, 40);
   label(doc, "Your score on the 10-point scale", MARGIN_L, y, C.forest, 7.5);
   y += 8;
-  y = drawSeverityBar(doc, y, report.severity);
+  y = checkPage(doc, y, 100);
+  // gauge card
+  doc.setFillColor(...C.paper);
+  doc.setDrawColor(...C.line);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(MARGIN_L, y, CONTENT_W, 92, 4, 4, "FD");
+  donutGauge(doc, 105, y + 30, 24, report.severity);
+  // zone captions in a clean row
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.ok);
+  doc.text("LOW 1-3", 58, y + 86, { align: "center" });
+  doc.setTextColor(...C.warn);
+  doc.text("MODERATE 4-7", 105, y + 86, { align: "center" });
+  doc.setTextColor(...C.danger);
+  doc.text("SEVERE 8-10", 152, y + 86, { align: "center" });
+  y += 100;
 
   y = bodyText(doc, report.severityDescription, MARGIN_L + 2, y, CONTENT_W - 4, 9.2);
   y += 4;
@@ -810,10 +1059,11 @@ function drawSeverity(doc: jsPDF, report: ReportData): void {
    02 — SPECIES
    ============================================================================ */
 function drawSpecies(doc: jsPDF, report: ReportData): void {
+  chapterDivider(doc, "02", "Rodent Species Identification", "Know your opponent -- behavior, nesting, and what it wants in your home.");
   doc.addPage();
   drawTopBar(doc);
   let y = 24;
-  y = sectionHeader(doc, "02", "Rodent Species Identification", y);
+  y = sectionHeader(doc, "02", "Rodent Species Identification", y, false);
 
   y = checkPage(doc, y, 30);
   card(doc, y, 19, { accent: C.forest });
@@ -859,10 +1109,11 @@ function drawSpecies(doc: jsPDF, report: ReportData): void {
    03 — HEALTH RISKS
    ============================================================================ */
 function drawHealth(doc: jsPDF, report: ReportData): void {
+  chapterDivider(doc, "03", "Health Risk Assessment", "What contamination in your home can do to your family -- and how to stay safe.");
   doc.addPage();
   drawTopBar(doc);
   let y = 24;
-  y = sectionHeader(doc, "03", "Health Risk Assessment", y);
+  y = sectionHeader(doc, "03", "Health Risk Assessment", y, false);
 
   // CDC safety strip — the single most important safety message
   y = checkPage(doc, y, 26);
@@ -922,10 +1173,11 @@ function drawHealth(doc: jsPDF, report: ReportData): void {
    04 — ENTRY POINTS
    ============================================================================ */
 function drawEntryPoints(doc: jsPDF, report: ReportData): void {
+  chapterDivider(doc, "04", "Probable Entry Points", "Every gap they use to get in -- and the order to seal them for good.");
   doc.addPage();
   drawTopBar(doc);
   let y = 24;
-  y = sectionHeader(doc, "04", "Probable Entry Points", y);
+  y = sectionHeader(doc, "04", "Probable Entry Points", y, false);
 
   y = bodyText(
     doc,
@@ -1053,10 +1305,11 @@ function drawTrapDiagram(doc: jsPDF, y: number): number {
    05 — TONIGHT'S ACTION PLAN
    ============================================================================ */
 function drawActions(doc: jsPDF, report: ReportData): void {
+  chapterDivider(doc, "05", "Tonight's Action Plan", "Your first 24 hours: contain, trap, and clean -- step by step.");
   doc.addPage();
   drawTopBar(doc);
   let y = 24;
-  y = sectionHeader(doc, "05", "Tonight's Action Plan", y);
+  y = sectionHeader(doc, "05", "Tonight's Action Plan", y, false);
 
   // CDC safety strip
   y = checkPage(doc, y, 26);
@@ -1121,7 +1374,7 @@ function drawActions(doc: jsPDF, report: ReportData): void {
    06 — EXPERT RESOURCES
    ============================================================================ */
 function drawResources(doc: jsPDF, y: number): number {
-  y = sectionHeader(doc, "06", "Expert Resources", y);
+  y = sectionHeader(doc, "06", "Expert Resources", y, false);
   y = bodyText(
     doc,
     "Go deeper with the full guides on MiceGoneGuide.com -- every link below is clickable in this PDF.",
@@ -1581,38 +1834,71 @@ function drawWorkbook(doc: jsPDF, report: ReportData): void {
    ============================================================================ */
 function drawClosing(doc: jsPDF): void {
   doc.addPage();
-  doc.setFillColor(...C.forestDeep);
-  doc.rect(0, 0, 210, 297, "F");
-  doc.setDrawColor(...C.gold);
-  doc.setLineWidth(0.9);
-  doc.rect(11, 11, 188, 275, "D");
+  markArtPage(doc);
+  coverArt(doc);
+  ghostNumeral(doc, "GO", C.gold, 0.10);
 
   doc.setFillColor(...C.gold);
   doc.rect(0, 0, 210, 4, "F");
 
+  // eyebrow
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
-  doc.setTextColor(...C.white);
-  doc.text("Your plan is ready.", 105, 90, { align: "center" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10.5);
-  doc.setTextColor(185, 205, 190);
-  doc.text("Work the blueprint in order -- contain, seal,", 105, 106, { align: "center" });
-  doc.text("deplete, then prove prevention.", 105, 113, { align: "center" });
+  doc.setFontSize(9);
+  doc.setTextColor(...C.gold);
+  doc.text("M I S S I O N   B R I E F   C O M P L E T E", 105, 72, { align: "center" });
 
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(30);
+  doc.setTextColor(...C.white);
+  doc.text("Your plan is ready.", 105, 96, { align: "center" });
+
+  // gold rule + diamond
+  const ry = 108;
   doc.setDrawColor(...C.gold);
-  doc.setLineWidth(0.8);
-  doc.line(85, 126, 125, 126);
+  doc.setLineWidth(1);
+  doc.line(78, ry, 97, ry);
+  doc.line(113, ry, 132, ry);
+  diamond(doc, 105, ry, 2.8, C.gold);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(185, 205, 190);
+  doc.text("Work the blueprint in order -- contain, seal,", 105, 124, { align: "center" });
+  doc.text("deplete, then prove prevention.", 105, 131, { align: "center" });
+
+  // four-phase mini strip
+  const phases = ["CONTAIN", "SEAL", "DEPLETE", "PROVE"];
+  const pw = 30;
+  const px0 = 105 - (phases.length * pw) / 2;
+  phases.forEach((ph, i) => {
+    const cx = px0 + pw * i + pw / 2;
+    doc.setFillColor(...C.gold);
+    doc.circle(cx, 148, 7, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.forestDeep);
+    doc.text(String(i + 1), cx, 150.8, { align: "center" });
+    doc.setFontSize(7);
+    doc.setTextColor(...C.white);
+    doc.text(ph, cx, 161, { align: "center" });
+    if (i < phases.length - 1) {
+      doc.setDrawColor(...C.gold);
+      doc.setLineWidth(0.6);
+      doc.line(cx + 11, 148, cx + pw - 11, 148);
+    }
+  });
 
   const links: [string, string][] = [
     ["Safe Home Plan", "https://micegoneguide.com/how-to-get-rid-of-mice/"],
     ["CDC Wet-Cleaning SOP", "https://micegoneguide.com/mouse-droppings-cleanup/"],
     ["Trap Placement Maps", "https://micegoneguide.com/where-to-place-mouse-traps/"],
   ];
-  let ly = 145;
+  let ly = 180;
   links.forEach(([t, url]) => {
     doc.setFillColor(24, 58, 37);
-    doc.roundedRect(55, ly, 100, 13, 6.5, 6.5, "F");
+    doc.setDrawColor(...C.goldDeep);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(55, ly, 100, 13, 6.5, 6.5, "FD");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(...C.white);
@@ -1624,17 +1910,17 @@ function drawClosing(doc: jsPDF): void {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(120, 150, 132);
-  doc.text("MiceGoneGuide.com -- Professional-Grade Mouse Elimination Intelligence", 105, 262, { align: "center" });
+  doc.text("MiceGoneGuide.com -- Professional-Grade Mouse Elimination Intelligence", 105, 258, { align: "center" });
   doc.setFontSize(6.5);
   doc.text(
     "This report is for informational purposes and is not a substitute for professional advice.",
     105,
-    269,
+    265,
     { align: "center" }
   );
   doc.setFillColor(...C.gold);
   doc.rect(0, 293, 210, 4, "F");
-  doc.link(30, 255, 150, 20, { url: "https://micegoneguide.com" });
+  doc.link(30, 252, 150, 18, { url: "https://micegoneguide.com" });
 }
 
 /* ============================================================================
@@ -1668,6 +1954,7 @@ export function generatePDF(
 ): jsPDF {
   tocEntries = [];
   tocPageNum = 0;
+  artPages = new Set<number>();
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   doc.setProperties({
@@ -1686,6 +1973,7 @@ export function generatePDF(
   drawEntryPoints(doc, report);               // 04
   drawActions(doc, report);                   // 05
 
+  chapterDivider(doc, "06", "Expert Resources", "Trusted guides for every step of the fight.");
   doc.addPage();
   drawTopBar(doc);
   let y = 24;
@@ -1705,9 +1993,8 @@ export function generatePDF(
   drawWorkbook(doc, report);                  // W1–W5
   drawClosing(doc);                           // closing (own footer)
 
-  const total = doc.getNumberOfPages();
   fillTOC(doc);
-  drawFooters(doc, new Set([1, total]));
+  drawFooters(doc, artPages);
 
   return doc;
 }
