@@ -1,83 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { writeFileSync } from "fs";
+import { describe, it, expect } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { generateReport } from "@/lib/report-generator";
 import { generatePDF } from "@/lib/pdf-generator";
-import { QuizAnswers } from "@/lib/quiz-data";
-
-// Offline: fonts must fall back to Helvetica gracefully and fast.
-beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => {
-      throw new Error("offline");
-    })
-  );
-});
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-const severeAnswers: QuizAnswers = {
-  evidence: ["sighting", "droppings", "nesting", "sounds", "urine_smell", "gnaw_marks"],
-  droppings_detail: "scattered",
-  sighting_detail: "multiple",
-  location: ["kitchen", "attic", "basement", "garage", "walls"],
-  home_type: "detached",
-  home_age: "very_old",
-  surroundings: "rural",
-  attractants: ["bird_feeder", "compost", "woodpile"],
-  timeline: "months",
-  season: "fall",
-  previous: ["snap_traps", "poison"],
-  previous_results: "temporary",
-  household: ["kids", "pets_dog", "allergies"],
-  food_storage: "open",
-  budget: "moderate",
-  zip: "90210",
-};
-
-const mildAnswers: QuizAnswers = {
-  evidence: ["droppings"],
-  droppings_detail: "small_dark",
-  location: ["kitchen"],
-  home_type: "apartment",
-  home_age: "new",
-  surroundings: "urban",
-  attractants: ["none_attractants"],
-  timeline: "days",
-  season: "spring",
-  previous: ["nothing"],
-  household: ["none"],
-  food_storage: "sealed",
-  budget: "minimal",
-  zip: "10001",
-};
-
-describe("pdf-generator render", () => {
-  it("renders the free blueprint without errors", async () => {
-    const report = generateReport(severeAnswers);
-    const doc = await generatePDF(report, false, severeAnswers);
-    const pages = doc.getNumberOfPages();
-    console.log("FREE pages:", pages, "| severity:", report.severity, "| species:", report.species.name);
-    expect(pages).toBeGreaterThan(8);
-    writeFileSync("/tmp/mice-blueprint-free.pdf", Buffer.from(doc.output("arraybuffer")));
-  });
-
-  it("renders the pro masterplan without errors", async () => {
-    const report = generateReport(severeAnswers);
-    const doc = await generatePDF(report, true, severeAnswers);
-    const pages = doc.getNumberOfPages();
-    console.log("PRO pages:", pages);
-    expect(pages).toBeGreaterThan(10);
-    writeFileSync("/tmp/mice-blueprint-pro.pdf", Buffer.from(doc.output("arraybuffer")));
-  });
-
-  it("renders a mild case without errors", async () => {
-    const report = generateReport(mildAnswers);
-    const doc = await generatePDF(report, false, mildAnswers);
-    const pages = doc.getNumberOfPages();
-    console.log("MILD pages:", pages, "| severity:", report.severity, "| species:", report.species.name);
-    expect(pages).toBeGreaterThan(8);
-    writeFileSync("/tmp/mice-blueprint-mild.pdf", Buffer.from(doc.output("arraybuffer")));
-  });
+const physical = { evidence: ["sighting", "droppings", "damaged_wiring"], location: ["kitchen", "attic"], household: ["kids", "pets_dog"], home_type: "apartment" };
+describe("printable planning PDF", () => {
+  for (const [name, answers, paid] of [["free", physical, false], ["extended", physical, true], ["unconfirmed", { evidence: ["sounds"] }, false]] as const) {
+    it(`renders ${name} without fabricated diagnoses`, async () => {
+      const doc = await generatePDF(generateReport(answers), paid);
+      expect(doc.getNumberOfPages()).toBeGreaterThan(1);
+      const raw = doc.output();
+      expect(raw).toContain("Your Mouse Control Plan");
+      expect(raw).not.toMatch(/94%|12,847|HIGH RISK|SEVERITY SCORE|EXPERT-REVIEWED|FACT-CHECKED|30-DAY PROJECTION/);
+      expect(raw).toContain("https://www.cdc.gov/healthy-pets/rodent-control/clean-up.html");
+      mkdirSync("evidence/pdfs", { recursive: true });
+      writeFileSync(`evidence/pdfs/${name}.pdf`, Buffer.from(doc.output("arraybuffer")));
+    });
+  }
 });

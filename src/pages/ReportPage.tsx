@@ -1,15 +1,12 @@
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { generateReport } from "@/lib/report-generator";
+import { generateReport, SOURCES } from "@/lib/report-generator";
 import { trackEvent } from "@/lib/analytics";
 import { generatePDF } from "@/lib/pdf-generator";
-import { QuizAnswers } from "@/lib/quiz-data";
+import type { QuizAnswers } from "@/lib/quiz-data";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Download, RotateCcw, Share2, CheckCircle2, FileText, Shield, Sparkles } from "lucide-react";
-import ReportLoading from "@/components/report/ReportLoading";
 import ReportSeveritySection from "@/components/report/ReportSeveritySection";
 import ReportSpeciesSection from "@/components/report/ReportSpeciesSection";
 import ReportHealthSection from "@/components/report/ReportHealthSection";
@@ -21,158 +18,35 @@ import EmailCaptureModal from "@/components/EmailCaptureModal";
 export default function ReportPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [factIndex, setFactIndex] = useState(0);
-  const [showEmailGate, setShowEmailGate] = useState(false);
-  const [emailCaptured, setEmailCaptured] = useState(false);
-
-  const answers = (location.state as { answers: QuizAnswers } | null)?.answers;
-
-  useEffect(() => {
-    if (!answers) {
-      navigate("/quiz");
-      return;
-    }
-    const factTimer = setInterval(() => setFactIndex((i) => (i + 1) % 8), 2000);
-    const loadTimer = setTimeout(() => {
-      setLoading(false);
-      setShowEmailGate(true);
-    }, 3000);
-    return () => { clearInterval(factTimer); clearTimeout(loadTimer); };
-  }, [answers, navigate]);
-
-  const report = useMemo(() => {
-    if (!answers) return null;
-    return generateReport(answers);
-  }, [answers]);
-
-  const handleEmailSuccess = () => {
-    setShowEmailGate(false);
-    setEmailCaptured(true);
-    trackEvent("email_captured");
-  };
-
-  if (!answers || !report) return null;
-  if (loading) return <ReportLoading factIndex={factIndex} />;
-  if (showEmailGate && !emailCaptured) {
-    return <EmailCaptureModal open={true} onSuccess={handleEmailSuccess} severity={report.severity} species={report.species.name} />;
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [status, setStatus] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const answers = (location.state as { answers?: QuizAnswers } | null)?.answers;
+  const report = useMemo(() => answers ? generateReport(answers) : null, [answers]);
+  useEffect(() => { if (!answers) navigate("/quiz", { replace: true }); else trackEvent("report_viewed"); }, [answers, navigate]);
+  async function download() {
+    if (!report || downloading) return;
+    setDownloading(true); setStatus("");
+    try { const doc = await generatePDF(report, false, answers); doc.save("MiceGoneGuide-Mouse-Control-Plan.pdf"); trackEvent("pdf_downloaded"); }
+    catch { setStatus("The PDF could not be generated. You can still read the full checklist below or print this page."); }
+    finally { setDownloading(false); }
   }
-
-  const handleDownloadPDF = async () => {
-    trackEvent("pdf_downloaded", { severity: report.severity, species: report.species.name });
-    const doc = await generatePDF(report, false, answers);
-    doc.save("MiceGoneGuide-Premium-Elimination-Blueprint.pdf");
-  };
-
-  const handleShare = async () => {
-    if (navigator.share) {
-      await navigator.share({
-        title: "My Mouse Problem Report — MiceGoneGuide",
-        text: `I scored ${report.severity}/10 on the MiceGoneGuide mouse infestation diagnostic. Get your free report:`,
-        url: "https://elimination.micegoneguide.com/quiz",
-      });
-    } else {
-      await navigator.clipboard.writeText("https://elimination.micegoneguide.com/quiz");
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
-
-      {/* Report Header */}
-      <div className="bg-hero relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,hsl(152_45%_30%/0.3),transparent_50%)]" />
-        <div className="container mx-auto px-4 py-12 md:py-16 max-w-3xl text-center relative z-10">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="flex items-center justify-center gap-3 mb-5">
-              <span className="trust-badge bg-primary-foreground/10 text-primary-foreground/70">
-                <Shield className="h-3 w-3" />
-                AI-Powered
-              </span>
-              <span className="trust-badge bg-primary-foreground/10 text-primary-foreground/70">
-                <CheckCircle2 className="h-3 w-3" />
-                Analysis Complete
-              </span>
-            </div>
-
-            <h1 className="text-3xl md:text-5xl font-display font-bold text-primary-foreground mb-3 leading-tight">
-              Your Mouse Problem Report
-            </h1>
-            <p className="text-primary-foreground/50 text-sm mb-8 max-w-md mx-auto">
-              Professional-grade analysis based on your {Object.keys(answers).length} diagnostic answers
-            </p>
-
-            <div className="flex flex-wrap gap-3 justify-center">
-              <Button
-                variant="hero"
-                size="lg"
-                onClick={handleDownloadPDF}
-                className="gap-2 shadow-xl"
-              >
-                <Download className="h-4 w-4" />
-                Download Free Blueprint PDF
-              </Button>
-              <Button
-                variant="hero-outline"
-                size="lg"
-                onClick={handleShare}
-                className="gap-2"
-              >
-                <Share2 className="h-4 w-4" />
-                Share Report
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      <div className="container mx-auto px-4 py-10 max-w-3xl">
-        <div className="space-y-6">
-          <ReportSeveritySection report={report} />
-          <ReportSpeciesSection report={report} />
-          <ReportHealthSection report={report} />
-          <ReportEntryPointsSection report={report} />
-          <ReportActionsSection report={report} />
-
-          {/* Download CTA between free and premium */}
-          <motion.div
-            className="glass-card-elevated rounded-2xl p-8 text-center overflow-hidden relative"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.55 }}
-          >
-            <div className="h-1 bg-accent-gradient absolute top-0 left-0 right-0" />
-            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-              <FileText className="h-6 w-6 text-primary" />
-            </div>
-            <h3 className="text-lg font-display font-bold text-foreground mb-2">
-              Save Your Premium Blueprint
-            </h3>
-            <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">
-              Download a premium, printable elimination blueprint with your diagnostic score, species ID, likely entry points, safety protocol, tonight checklist, decision filters, and prevention planner.
-            </p>
-            <Button variant="default" size="lg" onClick={handleDownloadPDF} className="gap-2">
-              <Download className="h-4 w-4" />
-              Download Free Blueprint PDF
-            </Button>
-          </motion.div>
-
-          <ReportPremiumPreview report={report} />
-
-          {/* Retake */}
-          <div className="text-center pt-4 pb-8">
-            <Link to="/quiz">
-              <Button variant="outline" className="gap-2">
-                <RotateCcw className="h-4 w-4" />
-                Retake the Quiz
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <Footer />
-    </div>
-  );
+  async function share() {
+    try {
+      const url = "https://elimination.micegoneguide.com/quiz";
+      if (navigator.share) await navigator.share({ title: "Mouse Control Planner", text: "An observation-based planning checklist, not an infestation diagnosis.", url });
+      else { await navigator.clipboard.writeText(url); setStatus("Planner link copied. Your answers were not shared."); }
+    } catch { setStatus("Nothing was shared. You can share the planner address without including your answers."); }
+  }
+  if (!report) return null;
+  return <div className="min-h-screen flex flex-col bg-background"><Navbar/>
+    <header className="bg-hero"><div className="container mx-auto px-4 py-12 max-w-3xl text-primary-foreground"><p className="text-sm mb-3">Observation-based planning</p><h1 className="text-3xl md:text-5xl font-display font-bold mb-5">Your Mouse Control Plan</h1><p className="mb-6">Organize inspection, trapping, cleanup and exclusion around the signs you reported.</p><div className="flex flex-wrap gap-3"><Button variant="hero" onClick={download} disabled={downloading}>{downloading ? "Preparing PDF..." : "Download free plan PDF"}</Button><Button variant="hero-outline" onClick={share}>Share the planner</Button></div>{status && <p role="status" className="mt-4 text-sm">{status}</p>}</div></header>
+    <main className="container mx-auto px-4 py-10 max-w-3xl space-y-6">
+      <ReportSeveritySection report={report}/><ReportActionsSection report={report}/><ReportHealthSection report={report}/><ReportEntryPointsSection report={report}/><ReportSpeciesSection report={report}/>
+      <section className="glass-card rounded-2xl p-6"><h2 className="text-xl font-semibold mb-3">How this plan was assembled</h2><p className="text-sm mb-4">Physical observations and unconfirmed indicators are kept separate. Reported hazards trigger specific professional-help prompts. Room choices organize inspection areas; household choices add access precautions. The planner does not calculate species probabilities, population counts or disease risk. Sources inform this guidance without endorsing the tool.</p><ul className="space-y-2 text-sm">{SOURCES.map(source => <li key={source.url}><a className="underline text-primary" href={source.url}>{source.label}</a></li>)}</ul></section>
+      <ReportPremiumPreview report={report}/>
+      {emailSaved ? <p role="status">Your request was saved. Email delivery has not been independently confirmed; download your plan here for immediate access.</p> : <><Button variant="outline" onClick={() => setShowEmail(!showEmail)} aria-expanded={showEmail}>Optional email check-ins</Button><EmailCaptureModal open={showEmail} onSuccess={() => { setEmailSaved(true); trackEvent("email_captured"); }}/></>}
+      <p className="text-sm text-muted-foreground">Download your plan before leaving this page. Individual answers are not included in the shared planner link.</p><Link className="inline-block underline text-primary" to="/quiz">Start a new plan</Link>
+    </main><Footer/></div>;
 }

@@ -1,150 +1,25 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
-import {
-  ClipboardList, ShoppingCart, Calendar, CheckCircle2,
-  Sparkles, Lock, Shield, Star, ArrowRight, Loader2
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
 import { trackEvent } from "@/lib/analytics";
 import type { ReportData } from "@/lib/report-generator";
-
-interface Props {
-  report: ReportData;
-}
-
-export default function ReportPremiumPreview({ report }: Props) {
+export default function ReportPremiumPreview({ report }: { report: ReportData }) {
   const [loading, setLoading] = useState(false);
-
-  const handleCheckout = async () => {
-    setLoading(true);
-    trackEvent("premium_checkout_clicked");
+  const [error, setError] = useState("");
+  async function checkout() {
+    setLoading(true); setError(""); trackEvent("premium_checkout_clicked");
+    // Retain the existing checkout service and price configuration. No purchase is inferred here.
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
     try {
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { quizResultId: "" },
-      });
-      if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch (err: any) {
-      toast({
-        title: "Checkout failed",
-        description: err.message || "Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-  return (
-    <motion.section
-      className="relative rounded-2xl overflow-hidden"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.6 }}
-    >
-      {/* Blurred background content */}
-      <div className="glass-card rounded-2xl p-6 md:p-8 pointer-events-none select-none filter blur-[6px]">
-        <h2 className="text-xl font-display font-bold text-foreground mb-4 flex items-center gap-3">
-          <ClipboardList className="h-6 w-6 text-primary" />
-          Room-by-Room Elimination Strategy
-        </h2>
-        <div className="space-y-3">
-          {report.roomByRoomStrategy.map((s, i) => (
-            <div key={i} className="bg-secondary rounded-lg p-3 text-sm text-muted-foreground">{s}</div>
-          ))}
-        </div>
-        <h2 className="text-xl font-display font-bold text-foreground mb-4 mt-8 flex items-center gap-3">
-          <ShoppingCart className="h-6 w-6 text-primary" />
-          Your Personalized Shopping List
-        </h2>
-        <div className="space-y-2">
-          {report.shoppingList.slice(0, 4).map((item, i) => (
-            <div key={i} className="flex items-center gap-3 bg-secondary rounded-lg p-3">
-              <CheckCircle2 className="h-4 w-4 text-accent shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-foreground">{item.name}</p>
-                <p className="text-xs text-muted-foreground">{item.reason}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <h2 className="text-xl font-display font-bold text-foreground mb-4 mt-8 flex items-center gap-3">
-          <Calendar className="h-6 w-6 text-primary" />
-          30-Day Elimination Timeline
-        </h2>
-        <div className="space-y-2">
-          {report.eliminationTimeline.slice(0, 3).map((t, i) => (
-            <div key={i} className="bg-secondary rounded-lg p-3">
-              <p className="text-sm font-semibold text-foreground">{t.day}</p>
-              <p className="text-xs text-muted-foreground">{t.action}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Overlay CTA */}
-      <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
-        <div className="text-center px-6 max-w-lg">
-          {/* Trust badges */}
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <span className="trust-badge">
-              <Shield className="h-3 w-3 text-primary" />
-              Expert-Grade
-            </span>
-            <span className="trust-badge">
-              <Star className="h-3 w-3 text-accent" />
-              4.9/5 Rating
-            </span>
-          </div>
-
-          <div className="inline-flex items-center gap-2 bg-accent/15 rounded-full px-5 py-2 text-sm font-semibold text-accent mb-5">
-            <Sparkles className="h-4 w-4" />
-            Pro Elimination Masterplan
-          </div>
-
-          <h3 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3 leading-tight">
-            Unlock Your Complete<br />
-            <span className="text-gradient-premium">Mouse Elimination Plan</span>
-          </h3>
-
-          <p className="text-muted-foreground mb-6 text-sm leading-relaxed max-w-sm mx-auto">
-            Get the step-by-step protocol to eliminate mice permanently — customized to YOUR exact situation, home, and budget.
-          </p>
-
-          <div className="grid grid-cols-2 gap-2.5 max-w-sm mx-auto text-left mb-7">
-            {[
-              "Room-by-room strategy",
-              "Exact product shopping list",
-              "Day-by-day protocol",
-              "Prevention calendar",
-              "CDC decontamination guide",
-              "Downloadable Pro PDF",
-            ].map((item) => (
-              <div key={item} className="flex items-center gap-2 text-xs text-foreground">
-                <CheckCircle2 className="h-3.5 w-3.5 text-accent shrink-0" />
-                {item}
-              </div>
-            ))}
-          </div>
-
-          <Button variant="premium" size="xl" className="shadow-xl" onClick={handleCheckout} disabled={loading}>
-            {loading ? <Loader2 className="h-5 w-5 mr-1 animate-spin" /> : <Lock className="h-5 w-5 mr-1" />}
-            {loading ? "Redirecting..." : "Unlock Full Plan — $9.99"}
-            {!loading && <ArrowRight className="h-4 w-4 ml-1" />}
-          </Button>
-
-          <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">
-            <span>One-time payment</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-            <span>Instant access</span>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-            <span>100% personalized</span>
-          </div>
-        </div>
-      </div>
-    </motion.section>
-  );
+      const { data, error: failure } = await supabase.functions.invoke("create-checkout", { body: { quizResultId: "" } });
+      if (failure || typeof data?.url !== "string") throw new Error("checkout unavailable");
+      const url = new URL(data.url);
+      if (url.protocol !== "https:" || url.hostname !== "checkout.stripe.com") throw new Error("unexpected checkout destination");
+      if (tab) tab.location.href = url.href;
+      else setError("Your browser blocked the checkout tab. Allow pop-ups for this site and try again. Your plan is still here.");
+    } catch { tab?.close(); setError("Checkout could not be opened. No payment was confirmed. Your free plan remains available."); }
+    finally { setLoading(false); }
+  }
+  return <section className="glass-card rounded-2xl p-6 md:p-8" id="pricing"><h2 className="text-2xl font-display font-bold mb-4">Optional extended planning</h2><p className="text-sm mb-5">The free safety guidance stays above. Extended planning organizes room-specific tasks, supply-selection criteria, work phases and recurring checks. It is not a professional inspection or a promise of elimination.</p><dl className="grid sm:grid-cols-2 gap-4 mb-6"><div><dt className="font-semibold">Room-by-room tasks</dt><dd className="text-sm text-muted-foreground">Organized around the areas you selected.</dd></div><div><dt className="font-semibold">Supply checklist</dt><dd className="text-sm text-muted-foreground">{report.shoppingList.length} categories to assess, not required products or exact trap quantities.</dd></div><div><dt className="font-semibold">Work phases</dt><dd className="text-sm text-muted-foreground">Inspect, control, clean and recheck without a guaranteed completion date.</dd></div><div><dt className="font-semibold">Monitoring routine</dt><dd className="text-sm text-muted-foreground">Record observed changes and decide when to seek qualified help.</dd></div></dl><Button variant="premium" onClick={checkout} disabled={loading}>{loading ? "Opening checkout..." : "View secure checkout"}</Button><p className="text-xs text-muted-foreground mt-3">Confirm the current price and terms at checkout. Opening checkout does not confirm a purchase.</p>{error && <p className="text-sm mt-4 text-destructive" role="alert">{error}</p>}</section>;
 }

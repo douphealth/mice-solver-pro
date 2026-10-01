@@ -14,56 +14,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Capture public source snapshot and public-page evidence
+      - name: Source snapshot excluding environment files
         run: |
           mkdir -p evidence
-          git archive --format=zip --output=evidence/source-snapshot.zip HEAD src public supabase package.json package-lock.json index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json tailwind.config.ts postcss.config.js eslint.config.js README.md
-          python3 - <<'PY'
-          import concurrent.futures, datetime, json, pathlib, urllib.request, urllib.error
-          root = pathlib.Path('evidence/public-pages'); root.mkdir(parents=True, exist_ok=True)
-          slugs = ['how-to-get-rid-of-mice', 'signs-of-mice-infestation', 'how-to-get-rid-of-mice-in-walls', 'best-mouse-traps-for-homes', 'humane-mouse-traps', 'steel-wool-vs-copper-mesh-for-mice', 'rats-vs-mice-whats-the-difference', 'mouse-removal', 'natural-mouse-repellents', 'mouse-droppings', 'best-bait-for-mouse-traps', 'mouse-proofing', 'how-to-remove-mice-droppings-safely']
-          targets = [(s, 'https://micegoneguide.com/' + s + '/') for s in slugs]
-          targets += [('rest-' + s, 'https://micegoneguide.com/wp-json/wp/v2/posts?slug=' + s) for s in slugs]
-          targets += [('robots', 'https://micegoneguide.com/robots.txt'), ('sitemap', 'https://micegoneguide.com/sitemap_index.xml'), ('start-here', 'https://start-here.micegoneguide.com/'), ('elimination', 'https://elimination.micegoneguide.com/')]
-          def fetch(item):
-              name, url = item
-              result = {'name': name, 'url': url, 'checked_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat()}
-              try:
-                  req = urllib.request.Request(url, headers={'User-Agent': 'MiceGoneGuide-Authorized-ReadOnly-Audit/1.0'})
-                  with urllib.request.urlopen(req, timeout=20) as response:
-                      data = response.read(4000000)
-                      result.update(status=response.status, final_url=response.url, content_type=response.headers.get('Content-Type'))
-                  (root / (name + '.txt')).write_bytes(data)
-              except Exception as exc:
-                  result['error'] = type(exc).__name__
-                  if isinstance(exc, urllib.error.HTTPError): result['status'] = exc.code
-              return result
-          with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-              results = list(pool.map(fetch, targets))
-          (root / 'manifest.json').write_text(json.dumps(results, indent=2))
-          print(json.dumps([{'name': r['name'], 'status': r.get('status'), 'error': r.get('error')} for r in results], indent=2))
-          PY
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: trust-reset-evidence-${{ github.sha }}
-          path: evidence/
-          retention-days: 7
-          if-no-files-found: error
+          git archive --format=zip --output=evidence/source-snapshot.zip HEAD src public supabase scripts tests package.json package-lock.json index.html vite.config.ts vitest.config.ts playwright.trust.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json tailwind.config.ts postcss.config.js eslint.config.js README.md
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
-      - name: Production build
-        run: npm run build
       - name: TypeScript validation
         run: npx tsc --noEmit -p tsconfig.app.json
-      - name: Run regression suite when supplied
-        run: |
-          if [ -f scripts/trust-regression.mjs ]; then node scripts/trust-regression.mjs; fi
-      - name: Upload build artifact for inspection (not deployment)
-        uses: actions/upload-artifact@v4
+      - name: Production build
+        run: npm run build
+      - name: Unit and PDF regressions
+        run: npm test
+      - name: Active-surface integrity regression
+        run: node scripts/trust-regression.mjs
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+      - name: Desktop and mobile browser regression
+        run: npx playwright test --config playwright.trust.config.ts
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trust-reset-evidence-${{ github.sha }}
+          path: |
+            evidence/
+            test-results/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Preserve build (not deployment)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: trust-reset-build-${{ github.sha }}
           path: dist/
