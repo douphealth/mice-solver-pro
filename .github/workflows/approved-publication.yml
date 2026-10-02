@@ -19,10 +19,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Validate the existing approved build before loading credentials
+      - name: Validate existing approved build
         run: |
-          node --check scripts/approved-release.mjs
-          node --check scripts/release-v2.mjs
+          node --check scripts/release-v3.mjs
           npm ci --ignore-scripts
           npx tsc --noEmit -p tsconfig.app.json
           npm test
@@ -30,19 +29,17 @@ jobs:
           npm run build
           npx --yes wrangler@4 --version
       - name: Create ephemeral release handshake
-        run: node scripts/release-v2.mjs init
-      - name: Publish public handshake only
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        run: node scripts/release-v3.mjs init
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-handshake-${{ github.run_id }}
           path: release-evidence/handshake.json
           retention-days: 1
           if-no-files-found: error
       - name: Authenticate and preserve encrypted pre-change backup
-        run: node scripts/release-v2.mjs preflight
-      - name: Preserve preflight and encrypted rollback evidence
+        run: node scripts/release-v3.mjs preflight
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-preflight-${{ github.run_id }}
           path: |
@@ -50,14 +47,15 @@ jobs:
             release-evidence/rollback.encrypted.json
           retention-days: 7
           if-no-files-found: warn
-      - name: Publish only explicitly selected and source-guarded targets
-        run: node scripts/release-v2.mjs deploy
-      - name: Preserve publication receipt
+      - name: Publish guarded changes
+        run: node scripts/release-v3.mjs deploy
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-receipt-${{ github.run_id }}
-          path: release-evidence/receipt.json
+          path: |
+            release-evidence/receipt.json
+            release-evidence/normalization.encrypted.json
           retention-days: 30
           if-no-files-found: warn
       - name: Destroy ephemeral credential state
