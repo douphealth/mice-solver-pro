@@ -1,0 +1,56 @@
+name: Published-page verification
+on:
+  push:
+    branches: [ops/approved-publish-2026-10-02]
+    paths: [.github/workflows/published-verification.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install browser tooling
+        run: npx --yes agent-browser install --with-deps
+      - name: Wait for the approved production release, then inspect public pages
+        run: |
+          mkdir -p public-qa
+          cat > /tmp/public-qa.mjs <<'EOF'
+          import fs from 'node:fs';
+          import {spawnSync} from 'node:child_process';
+          const SOURCE='0721ca88c9111fd1648aa471667bb49cccd9f193';
+          const APP='https://elimination.micegoneguide.com';
+          const slugs=['how-to-get-rid-of-mice','signs-of-mice-infestation','how-to-get-rid-of-mice-in-walls','best-mouse-traps-for-homes','humane-mouse-traps','steel-wool-vs-copper-mesh-for-mice','rats-vs-mice-whats-the-difference','mouse-removal','natural-mouse-repellents','mouse-droppings'];
+          const report={checked_at:new Date().toISOString(),pages:[],app_release:null};
+          for(let i=0;i<30;i++) {
+            try {const r=await fetch(APP+'/mgg-release.json?qa='+process.env.GITHUB_RUN_ID,{signal:AbortSignal.timeout(12000)});const v=await r.json();if(v.source_commit===SOURCE){report.app_release=v;break;}} catch{}
+            await new Promise(r=>setTimeout(r,10000));
+          }
+          function browser(...args){const r=spawnSync('npx',['--yes','agent-browser',...args],{encoding:'utf8',timeout:60000,maxBuffer:1000000});if(r.status!==0)throw new Error('Browser command failed: '+args[0]+' '+r.stderr.slice(0,250));return r.stdout.trim();}
+          browser('set','viewport','390','844');
+          for(const slug of slugs){
+            const url='https://micegoneguide.com/'+slug+'/';
+            const response=await fetch(url+'?mgg_qa='+process.env.GITHUB_RUN_ID,{signal:AbortSignal.timeout(30000)});
+            browser('open',url+'?mgg_qa='+process.env.GITHUB_RUN_ID);
+            const expression=`(()=>{const body=document.querySelector('.entry-content')||document.querySelector('article')||document.body;return JSON.stringify({title:document.title,canonical:document.querySelector('link[rel="canonical"]')?.href,viewport:innerWidth,document_width:document.documentElement.scrollWidth,marker:!!document.querySelector('[data-mgg-release]'),headings:Array.from(body.querySelectorAll('h1,h2')).map(e=>e.textContent.trim()),broken_fragments:Array.from(body.querySelectorAll('a[href^="#"]')).map(a=>a.getAttribute('href')).filter(h=>h.length>1&&!document.getElementById(h.slice(1))),unsupported_scripts:/window\\.(?:calcGapPlan|calcExclusion|calcDroppingID)/.test(body.innerHTML),visible_text:body.innerText});})()`;
+            let data=browser('eval',expression);for(let i=0;i<2&&typeof data==='string';i++){try{data=JSON.parse(data)}catch{break}}
+            if(typeof data!=='object')throw new Error('Could not decode browser evidence');
+            fs.writeFileSync('public-qa/'+slug+'.txt',data.visible_text);delete data.visible_text;
+            browser('screenshot','public-qa/'+slug+'-mobile.png');
+            report.pages.push({slug,url,http:response.status,...data});
+            fs.writeFileSync('public-qa/report.json',JSON.stringify(report,null,2));
+          }
+          browser('close');
+          report.checks={all_http_200:report.pages.every(p=>p.http===200),all_self_canonical:report.pages.every(p=>p.canonical===p.url),all_marked:report.pages.every(p=>p.marker),no_horizontal_overflow:report.pages.every(p=>p.document_width<=p.viewport),no_broken_in_article_fragments:report.pages.every(p=>p.broken_fragments.length===0),unsupported_widget_scripts_absent:report.pages.every(p=>!p.unsupported_scripts)};
+          fs.writeFileSync('public-qa/report.json',JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report,null,2));
+          if(!Object.values(report.checks).every(Boolean))process.exitCode=1;
+          EOF
+          node /tmp/public-qa.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: published-page-qa-${{ github.run_id }}
+          path: public-qa/
+          retention-days: 30
+          if-no-files-found: warn
