@@ -36,7 +36,11 @@ export default function PaymentSuccessPage() {
     const reason = res.ok ? res.data.entitlement.reason : res.data?.entitlement?.reason;
     if (reason === "unpaid") setView({ kind: "pending" });
     else if (reason === "refunded" || reason === "wrong_product" || reason === "not_found") setView({ kind: "denied", reason });
-    else setView({ kind: "error", message: res.ok ? "We couldn't verify this purchase right now." : res.message });
+    else {
+      // Keep the reference so /pro re-checks automatically later. Storing an id grants nothing: the server still decides.
+      writeJSON(KEYS.pro, { sessionId, savedAt: new Date().toISOString() });
+      setView({ kind: "error", message: res.ok ? "We couldn't verify this purchase right now." : res.message });
+    }
   }, [sessionId]);
 
   useEffect(() => { void run(); }, [run]);
@@ -80,7 +84,7 @@ export default function PaymentSuccessPage() {
           {view.kind === "error" && (<>
             <XCircle className="mx-auto h-14 w-14 text-[hsl(33_90%_42%)]" aria-hidden="true" />
             <h1 className="mt-5 text-3xl font-bold">We couldn't finish checking</h1>
-            <p className="mt-3 text-muted-foreground">{view.message} If you've paid, you haven't lost anything: try again in a moment.</p>
+            <p className="mt-3 text-muted-foreground">{view.message} If you've paid, you haven't lost anything. This purchase reference is saved on this device, so Pro will open from the <strong>Pro</strong> page as soon as verification works. You can also email us and we'll sort it out.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-3"><Button variant="default" onClick={() => void run()}><RotateCw className="h-4 w-4" aria-hidden="true" />Try again</Button><Button asChild variant="outline"><Link to="/restore">Restore my purchase</Link></Button></div>
           </>)}
 

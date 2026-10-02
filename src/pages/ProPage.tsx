@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowRight, BadgeCheck, CreditCard, Loader2, LockKeyhole, RotateCw, ShieldCheck, Sparkles } from "lucide-react";
 import PageShell from "@/components/layout/PageShell";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Callout, ScopeNote, SectionHeading } from "@/components/ui-kit";
 import { usePro } from "@/hooks/use-pro";
-import { CHECKOUT_URL, PRO_NAME, PRO_PRICE_LABEL } from "@/lib/api";
+import { CHECKOUT_URL, PRO_NAME, PRO_PRICE_LABEL, checkoutAvailable } from "@/lib/api";
 import { trackEvent } from "@/lib/analytics";
 import { CONTACT_EMAIL } from "@/lib/sources";
 
@@ -50,10 +51,19 @@ function Sample() {
 
 export default function ProPage() {
   const pro = usePro();
+  const [available, setAvailable] = useState<boolean | null>(null);
+  useEffect(() => { void checkoutAvailable().then(setAvailable); }, []);
 
   if (pro.status === "active") return <PageShell><ProWorkspace pro={pro} /></PageShell>;
 
-  const buy = (
+  // Never sell what the server can't yet unlock: the button appears only while purchase verification is available.
+  const buy = available === false ? (
+    <div className="rounded-xl border border-dashed bg-secondary/60 p-4 text-sm leading-relaxed" role="status" data-testid="checkout-unavailable">
+      <p className="font-semibold">Pro checkout is being finalised</p>
+      <p className="mt-1 text-muted-foreground">We pause sales whenever we can't instantly confirm and unlock a purchase. Your free plan and tools are fully available now. Please check back soon.</p>
+      <Button asChild variant="default" size="sm" className="mt-3"><Link to="/quiz">Build my free plan</Link></Button>
+    </div>
+  ) : (
     <Button asChild variant="premium" size="xl">
       <a href={CHECKOUT_URL} onClick={() => trackEvent("checkout_started")} data-testid="checkout-link">Get the {PRO_NAME} · {PRO_PRICE_LABEL}<ArrowRight className="h-5 w-5" aria-hidden="true" /></a>
     </Button>

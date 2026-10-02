@@ -49,6 +49,16 @@ export async function requestRestore(email: string): Promise<{ ok: boolean; mess
   }
 }
 
+/** Whether the server can currently verify and fulfil Pro purchases. Fails open on network errors; only an explicit "stripe: false" blocks the sale. */
+export async function checkoutAvailable(): Promise<boolean> {
+  try {
+    const { status, body } = await call("/api/health");
+    return !(status === 200 && body?.stripe === false);
+  } catch {
+    return true;
+  }
+}
+
 /** Stripe Payment Link for the Pro Masterplan. Opening or returning from it never grants access by itself. */
 export const CHECKOUT_URL = "https://buy.stripe.com/dRm6oH61y1qwbUN3UGejK02";
 export const PRO_PRICE_LABEL = "$9.99";

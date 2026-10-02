@@ -150,6 +150,25 @@ test.describe("Pro purchase and gating", () => {
     await noOverflow(page);
   });
 
+  test("sales pause themselves when the server can't verify purchases", async ({ page }) => {
+    await page.route("**/api/health", route => route.fulfill({ json: { ok: true, stripe: false, email: true } }));
+    await page.goto("/pro");
+    await expect(page.getByTestId("checkout-unavailable").first()).toBeVisible();
+    await expect(page.getByTestId("checkout-link")).toHaveCount(0);
+  });
+
+  test("if verification is briefly unavailable the buyer's reference is kept and Pro opens once it recovers", async ({ page }) => {
+    await page.route("**/api/entitlement*", route => route.fulfill({ status: 503, json: { entitlement: { active: false, reason: "unavailable" }, message: "We couldn't reach the payment service." } }));
+    await page.route("**/api/pro-pack*", route => route.fulfill({ status: 503, json: { entitlement: { active: false, reason: "unavailable" } } }));
+    await page.goto(`/payment-success?session_id=${PAID}`);
+    await expect(page.getByRole("heading", { name: "We couldn't finish checking" })).toBeVisible();
+    await expect(page.getByText(/saved on this device/)).toBeVisible();
+    await page.unroute("**/api/entitlement*");
+    await page.unroute("**/api/pro-pack*");
+    await page.goto("/pro");
+    await expect(page.getByRole("heading", { name: "Your Pro workspace" })).toBeVisible();
+  });
+
   test("a stored but unpaid or foreign session never unlocks Pro", async ({ page }) => {
     for (const id of [UNPAID, OTHER, "cs_test_NOSUCH00000001"]) {
       await page.goto("/");
