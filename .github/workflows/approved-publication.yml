@@ -22,6 +22,7 @@ jobs:
       - name: Validate the existing approved build before loading credentials
         run: |
           node --check scripts/approved-release.mjs
+          node --check scripts/release-v2.mjs
           npm ci --ignore-scripts
           npx tsc --noEmit -p tsconfig.app.json
           npm test
@@ -29,7 +30,7 @@ jobs:
           npm run build
           npx --yes wrangler@4 --version
       - name: Create ephemeral release handshake
-        run: node scripts/approved-release.mjs init
+        run: node scripts/release-v2.mjs init
       - name: Publish public handshake only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -38,7 +39,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
       - name: Authenticate and preserve encrypted pre-change backup
-        run: node scripts/approved-release.mjs preflight
+        run: node scripts/release-v2.mjs preflight
       - name: Preserve preflight and encrypted rollback evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -50,7 +51,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
       - name: Publish only explicitly selected and source-guarded targets
-        run: node scripts/approved-release.mjs deploy
+        run: node scripts/release-v2.mjs deploy
       - name: Preserve publication receipt
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -61,4 +62,4 @@ jobs:
           if-no-files-found: warn
       - name: Destroy ephemeral credential state
         if: always()
-        run: rm -rf -- "$RUNNER_TEMP/mgg-approved-release"
+        run: rm -rf -- "$RUNNER_TEMP/mgg-approved-release" "$RUNNER_TEMP/mgg-release-adapter.mjs"
