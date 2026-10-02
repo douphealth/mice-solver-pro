@@ -1,0 +1,77 @@
+name: Complete approved publication
+on:
+  push:
+    branches: [ops/approved-publish-2026-10-02]
+    paths: [.github/workflows/publication-final.yml]
+permissions:
+  contents: read
+concurrency:
+  group: mgg-approved-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      GH_READ_TOKEN: ${{ github.token }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 0721ca88c9111fd1648aa471667bb49cccd9f193
+          path: app-source
+          persist-credentials: false
+      - name: Validate the prepared app including preserved production checkout
+        working-directory: app-source
+        run: |
+          npm ci --ignore-scripts
+          npx tsc --noEmit -p tsconfig.app.json
+          npm test
+          node scripts/trust-regression.mjs
+          npm run build
+          npx --yes wrangler@4 --version
+          npx playwright install --with-deps chromium
+          npm run dev -- --host 127.0.0.1 > /tmp/mgg-vite.log 2>&1 &
+          for i in $(seq 1 30); do if curl -sf http://127.0.0.1:8080/ > /dev/null; then break; fi; sleep 1; done
+          PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npx playwright test --reporter=line
+      - name: Create ephemeral handshake
+        run: node scripts/publication-final.mjs init
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: final-handshake-${{ github.run_id }}
+          path: publication-evidence/handshake.json
+          retention-days: 1
+      - name: Preserve published content and verify the real deployment
+        run: node scripts/publication-final.mjs inspect
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: final-before-${{ github.run_id }}
+          path: publication-evidence/
+          retention-days: 30
+      - name: Publish source-guarded corrections
+        run: node scripts/publication-final.mjs apply
+      - name: Inspect the production app in a browser without transactions
+        if: success()
+        run: |
+          npx --yes agent-browser install --with-deps
+          npx --yes agent-browser open https://elimination.micegoneguide.com/
+          npx --yes agent-browser snapshot -i > publication-evidence/live-desktop-snapshot.txt
+          npx --yes agent-browser screenshot publication-evidence/live-desktop.png
+          npx --yes agent-browser set viewport 390 844
+          npx --yes agent-browser screenshot publication-evidence/live-mobile.png
+          npx --yes agent-browser eval 'JSON.stringify({title:document.title,overflow:document.documentElement.scrollWidth>innerWidth,h1:document.querySelector("h1")?.textContent,links:Array.from(document.querySelectorAll("a")).map(a=>({text:a.textContent,href:a.href}))})' > publication-evidence/live-mobile-check.json
+          npx --yes agent-browser open https://elimination.micegoneguide.com/quiz
+          npx --yes agent-browser snapshot -i > publication-evidence/live-quiz-snapshot.txt
+          npx --yes agent-browser close
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: final-publication-${{ github.run_id }}
+          path: publication-evidence/
+          retention-days: 30
+      - name: Wipe credentials and ephemeral private key
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/mgg-final-publication"
