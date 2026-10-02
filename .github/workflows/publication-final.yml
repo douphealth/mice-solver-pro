@@ -24,12 +24,34 @@ jobs:
           ref: 0721ca88c9111fd1648aa471667bb49cccd9f193
           path: app-source
           persist-credentials: false
-      - name: Validate the prepared app including preserved production checkout
+      - name: Create ephemeral handshake
+        run: node scripts/publication-adapter.mjs init
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: final-handshake-${{ github.run_id }}
+          path: publication-evidence/handshake.json
+          retention-days: 1
+      - name: Preserve published content and verify the real deployment
+        run: node scripts/publication-adapter.mjs inspect
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: final-before-${{ github.run_id }}
+          path: publication-evidence/
+          retention-days: 30
+      - name: Validate the prepared app including production checkout
+        id: validate
+        continue-on-error: true
         working-directory: app-source
         run: |
           npm ci --ignore-scripts
           npx tsc --noEmit -p tsconfig.app.json
-          npx vitest run --root "$PWD" --config "$PWD/vitest.config.ts"
+          cat > vitest.release.config.ts <<'EOF'
+          import base from './vitest.config';
+          import {defineConfig} from 'vitest/config';
+          import path from 'node:path';
+          export default defineConfig({...base,root:process.cwd(),test:{...base.test,setupFiles:[path.resolve('src/test/setup.ts')]},resolve:{alias:{'@':path.resolve('src')}}});
+          EOF
+          npx vitest run --config "$PWD/vitest.release.config.ts"
           node scripts/trust-regression.mjs
           npm run build
           npx --yes wrangler@4 --version
@@ -37,23 +59,10 @@ jobs:
           npm run dev -- --host 127.0.0.1 > /tmp/mgg-vite.log 2>&1 &
           for i in $(seq 1 30); do if curl -sf http://127.0.0.1:8080/ > /dev/null; then break; fi; sleep 1; done
           PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npx playwright test --config "$PWD/playwright.config.ts" --reporter=line
-      - name: Create ephemeral handshake
-        run: node scripts/publication-final.mjs init
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: final-handshake-${{ github.run_id }}
-          path: publication-evidence/handshake.json
-          retention-days: 1
-      - name: Preserve published content and verify the real deployment
-        run: node scripts/publication-final.mjs inspect
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: final-before-${{ github.run_id }}
-          path: publication-evidence/
-          retention-days: 30
-      - name: Publish source-guarded corrections
-        run: node scripts/publication-final.mjs apply
-      - name: Inspect the production app in a browser without transactions
+          touch .release-validated
+      - name: Publish source-guarded corrections; app requires passing validation
+        run: node scripts/publication-adapter.mjs apply
+      - name: Inspect production in a browser without transactions
         if: success()
         run: |
           npx --yes agent-browser install --with-deps
@@ -74,4 +83,4 @@ jobs:
           retention-days: 30
       - name: Wipe credentials and ephemeral private key
         if: always()
-        run: rm -rf -- "$RUNNER_TEMP/mgg-final-publication"
+        run: rm -rf -- "$RUNNER_TEMP/mgg-final-publication" "$RUNNER_TEMP/mgg-final-adapter.mjs"
