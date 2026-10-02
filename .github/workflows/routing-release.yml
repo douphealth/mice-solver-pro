@@ -1,0 +1,50 @@
+name: Preserve production routing and release
+on:
+  push:
+    branches: [ops/approved-publish-2026-10-02]
+    paths: [.github/workflows/routing-release.yml]
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 130
+    env:
+      GH_READ_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: node scripts/routing-stage.mjs init
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: routing-handshake-${{ github.run_id }}
+          path: routing-evidence/handshake.json
+          retention-days: 1
+      - name: Read and preserve the routing layer
+        run: node scripts/routing-stage.mjs run 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: routing-inspection-${{ github.run_id }}
+          path: routing-evidence/
+          retention-days: 30
+      - name: Apply only the reviewed source-guarded change
+        run: node scripts/routing-stage.mjs run 2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: routing-release-${{ github.run_id }}
+          path: routing-evidence/
+          retention-days: 30
+      - name: Validate production behavior
+        run: node scripts/routing-stage.mjs run 3
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: routing-final-${{ github.run_id }}
+          path: routing-evidence/
+          retention-days: 30
+      - name: Remove ephemeral secrets
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/mgg-routing" "$RUNNER_TEMP/mgg-routing-stage.mjs"
