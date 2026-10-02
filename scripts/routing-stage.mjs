@@ -1,0 +1,2 @@
+import fs from 'node:fs';import {pathToFileURL} from 'node:url';
+let source=fs.readFileSync('scripts/routing-console.mjs','utf8');const before='for(let i=1;i<=6;i++)';if(source.split(before).length!==2)throw new Error('Console source guard failed');source=source.replace(before,'for(const i of [Number(process.argv[3])])');const file=process.env.RUNNER_TEMP+'/mgg-routing-stage.mjs';fs.writeFileSync(file,source,{mode:0o600});await import(pathToFileURL(file).href);
