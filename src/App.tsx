@@ -1,8 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import RouteMetadata from "./components/RouteMetadata";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { lazyRetry as lazy } from "./lib/lazy";
 
 const QuizPage = lazy(() => import("./pages/QuizPage"));
 const PlanPage = lazy(() => import("./pages/PlanPage"));
@@ -25,6 +27,7 @@ const Loading = () => (
 const App = () => (
   <BrowserRouter>
     <RouteMetadata />
+    <ErrorBoundary>
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/" element={<Index />} />
@@ -43,6 +46,7 @@ const App = () => (
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   </BrowserRouter>
 );
 

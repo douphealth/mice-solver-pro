@@ -107,6 +107,26 @@ test.describe("free planner", () => {
   });
 });
 
+test.describe("resilience after deploys", () => {
+  test("a missing script chunk triggers one automatic reload instead of a blank page", async ({ page }) => {
+    let failures = 0;
+    await page.route("**/assets/QuizPage-*.js", route => { if (failures++ === 0) return route.abort(); return route.continue(); });
+    await page.goto("/");
+    await page.getByRole("link", { name: "Build my free plan" }).first().click();
+    await expect(page.getByRole("heading", { name: "What have you actually observed?" })).toBeVisible({ timeout: 15000 });
+    expect(failures).toBeGreaterThanOrEqual(2);
+  });
+
+  test("a permanently broken chunk shows a friendly screen, not a blank page", async ({ page }) => {
+    await page.route("**/assets/QuizPage-*.js", route => route.abort());
+    await page.goto("/");
+    await page.evaluate(() => sessionStorage.setItem("mgg.chunk-reload", String(Date.now())));
+    await page.getByRole("link", { name: "Build my free plan" }).first().click();
+    await expect(page.getByRole("alert")).toContainText("Something went wrong on this page");
+    await expect(page.getByRole("button", { name: "Reload page" })).toBeVisible();
+  });
+});
+
 test.describe("free tools", () => {
   test("signs guide flags hazards", async ({ page }) => {
     await page.goto("/tools/calculator");

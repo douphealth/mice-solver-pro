@@ -31,7 +31,7 @@ export function PrivacyPage() {
         </ul>
       </section>
       <section><h2>What is stored in your browser</h2><p>Quiz answers, checklist progress, trap layout, evidence log entries, your plan start date and, after a Pro purchase, your access link and a saved copy of your Pro content so it opens if you're offline. Clear your browser's site data to remove all of it. Export your evidence log to CSV first if you want to keep it.</p></section>
-      <section><h2>Analytics and cookies</h2><p>We don't set tracking cookies and don't currently run analytics on this app. If that changes, measurement will be off until you consent.</p></section>
+      <section><h2>Analytics and cookies</h2><p>We don't set cookies. Cloudflare, which hosts this site, may add its Web Analytics beacon, a cookieless measurement of page views and load performance that doesn't track you across sites. We run no other analytics, and none will be added without your consent.</p></section>
       <section><h2>Your choices</h2><p>To unsubscribe, delete your information or ask a question, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p></section>
     </Doc>
   );
