@@ -1,0 +1,54 @@
+name: Trust reset validation
+on:
+  push:
+    branches: [fix/evidence-led-trust-reset-2026-10-01]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: trust-reset-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Source snapshot excluding environment files
+        run: |
+          mkdir -p evidence
+          git archive --format=zip --output=evidence/source-snapshot.zip HEAD src public supabase scripts tests package.json package-lock.json index.html vite.config.ts vitest.config.ts playwright.trust.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json tailwind.config.ts postcss.config.js eslint.config.js README.md
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: TypeScript validation
+        run: npx tsc --noEmit -p tsconfig.app.json
+      - name: Production build
+        run: npm run build
+      - name: Unit and PDF regressions
+        run: npm test
+      - name: Active-surface integrity regression
+        run: node scripts/trust-regression.mjs
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+      - name: Desktop and mobile browser regression
+        run: npx playwright test --config playwright.trust.config.ts
+      - name: Preserve verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trust-reset-evidence-${{ github.sha }}
+          path: |
+            evidence/
+            test-results/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Preserve build (not deployment)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trust-reset-build-${{ github.sha }}
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error

@@ -1,212 +1,47 @@
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { quizSteps, type QuizAnswers } from "@/lib/quiz-data";
 import { trackEvent } from "@/lib/analytics";
-import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { quizSteps, QuizAnswers } from "@/lib/quiz-data";
-import { ArrowLeft, ArrowRight, CheckCircle2, Clock, Shield } from "lucide-react";
+import { PLANNER_LIMITATION } from "@/lib/report-generator";
 import Navbar from "@/components/Navbar";
+import { Button } from "@/components/ui/button";
 
 export default function QuizPage() {
   const navigate = useNavigate();
   const [answers, setAnswers] = useState<QuizAnswers>({});
-  const [zipValue, setZipValue] = useState("");
-
-  const activeSteps = useMemo(() => {
-    return quizSteps.filter((s) => !s.showIf || s.showIf(answers));
-  }, [answers]);
-
   const [stepIndex, setStepIndex] = useState(0);
-  const current = activeSteps[Math.min(stepIndex, activeSteps.length - 1)];
-  const progress = ((stepIndex + 1) / activeSteps.length) * 100;
-
-  const handleSelect = (optionId: string) => {
-    if (current.type === "single") {
-      setAnswers((prev) => ({ ...prev, [current.id]: optionId }));
-      setTimeout(() => {
-        if (stepIndex < activeSteps.length - 1) setStepIndex(stepIndex + 1);
-      }, 300);
-    } else if (current.type === "multi") {
-      setAnswers((prev) => {
-        const existing = (prev[current.id] as string[]) || [];
-        if (optionId === "nothing" || optionId === "none" || optionId === "none_attractants") {
-          return { ...prev, [current.id]: [optionId] };
-        }
-        const filtered = existing.filter((id) => id !== "nothing" && id !== "none" && id !== "none_attractants");
-        if (filtered.includes(optionId)) {
-          return { ...prev, [current.id]: filtered.filter((id) => id !== optionId) };
-        }
-        return { ...prev, [current.id]: [...filtered, optionId] };
-      });
-    }
-  };
-
-  const isSelected = (optionId: string) => {
-    const val = answers[current.id];
-    if (Array.isArray(val)) return val.includes(optionId);
-    return val === optionId;
-  };
-
-  const canProceed = () => {
-    if (current.type === "zip") return zipValue.length === 5;
-    const val = answers[current.id];
-    if (!val) return false;
-    if (Array.isArray(val)) return val.length > 0;
-    return true;
-  };
-
-  const handleNext = () => {
-    if (current.type === "zip") {
-      setAnswers((prev) => ({ ...prev, zip: zipValue }));
-    }
-    if (stepIndex < activeSteps.length - 1) {
-      setStepIndex(stepIndex + 1);
-    } else {
-      const finalAnswers = { ...answers };
-      if (current.type === "zip") finalAnswers.zip = zipValue;
-      trackEvent("quiz_completed", { steps: activeSteps.length });
-      navigate("/report", { state: { answers: finalAnswers } });
-    }
-  };
-
-  const handleBack = () => {
-    if (stepIndex > 0) setStepIndex(stepIndex - 1);
-  };
-
-  const estimatedTimeLeft = Math.max(1, Math.ceil((activeSteps.length - stepIndex) * 0.25));
-
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
-
-      <div className="flex-1 flex flex-col">
-        {/* Progress bar */}
-        <div className="w-full bg-muted h-1.5 relative">
-          <motion.div
-            className="h-full bg-accent-gradient rounded-r-full"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.4 }}
-          />
-        </div>
-
-        <div className="flex-1 container mx-auto px-4 py-8 md:py-16 max-w-2xl">
-          {/* Step counter */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="section-badge bg-primary/10 text-primary">
-                {current.category}
-              </div>
-              <span className="text-xs text-muted-foreground">
-                {stepIndex + 1} of {activeSteps.length}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              ~{estimatedTimeLeft} min left
-            </div>
-          </div>
-
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={current.id}
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.3 }}
-            >
-              <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-2 leading-tight">
-                {current.question}
-              </h2>
-              {current.subtitle && (
-                <p className="text-muted-foreground mb-8 text-sm">{current.subtitle}</p>
-              )}
-
-              {/* Options */}
-              {current.type !== "zip" && current.options && (
-                <div className={`grid gap-3 ${
-                  current.options.length <= 4 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-3"
-                }`}>
-                  {current.options.map((opt) => {
-                    const selected = isSelected(opt.id);
-                    return (
-                      <motion.button
-                        key={opt.id}
-                        onClick={() => handleSelect(opt.id)}
-                        whileTap={{ scale: 0.97 }}
-                        className={`relative flex flex-col items-center text-center p-4 rounded-xl border-2 transition-all duration-200 ${
-                          selected
-                            ? "border-primary bg-primary/5 shadow-md ring-1 ring-primary/20"
-                            : "border-border bg-card hover:border-primary/30 hover:shadow-sm"
-                        }`}
-                      >
-                        {selected && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            className="absolute top-2 right-2"
-                          >
-                            <CheckCircle2 className="h-4 w-4 text-primary" />
-                          </motion.div>
-                        )}
-                        <span className="text-2xl mb-2">{opt.icon}</span>
-                        <span className="text-sm font-medium text-foreground">{opt.label}</span>
-                        {opt.description && (
-                          <span className="text-xs text-muted-foreground mt-1 leading-relaxed">{opt.description}</span>
-                        )}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* ZIP input */}
-              {current.type === "zip" && (
-                <div className="max-w-xs">
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="e.g. 97201"
-                    maxLength={5}
-                    value={zipValue}
-                    onChange={(e) => setZipValue(e.target.value.replace(/\D/g, ""))}
-                    className="text-2xl text-center h-16 font-mono tracking-widest border-2"
-                  />
-                  <p className="text-xs text-muted-foreground mt-3 text-center flex items-center justify-center gap-1">
-                    <Shield className="h-3 w-3" />
-                    Optional — helps with seasonal and regional insights
-                  </p>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Navigation */}
-          <div className="flex justify-between mt-10">
-            <Button
-              variant="ghost"
-              onClick={handleBack}
-              disabled={stepIndex === 0}
-              className="gap-1"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back
-            </Button>
-
-            {(current.type === "multi" || current.type === "zip") && (
-              <Button
-                variant="hero"
-                onClick={handleNext}
-                disabled={current.type === "zip" ? false : !canProceed()}
-                className="gap-1"
-              >
-                {stepIndex === activeSteps.length - 1 ? "Get My Free Report" : "Next"}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  const current = quizSteps[stepIndex];
+  const value = answers[current.id];
+  const valid = current.type === "single" ? typeof value === "string" && current.options.some(x => x.id === value) : Array.isArray(value) && value.length > 0;
+  useEffect(() => { trackEvent("planner_start"); }, []);
+  function select(id: string) {
+    if (!current.options.some(x => x.id === id)) return;
+    setAnswers(previous => {
+      if (current.type === "single") return { ...previous, [current.id]: id };
+      const old = Array.isArray(previous[current.id]) ? previous[current.id] as string[] : [];
+      if (["none", "nothing"].includes(id)) return { ...previous, [current.id]: [id] };
+      const choices = old.filter(x => !["none", "nothing"].includes(x));
+      return { ...previous, [current.id]: choices.includes(id) ? choices.filter(x => x !== id) : [...choices, id] };
+    });
+  }
+  function next() {
+    if (!valid) return;
+    if (stepIndex + 1 < quizSteps.length) { setStepIndex(stepIndex + 1); return; }
+    trackEvent("planner_complete", { steps: quizSteps.length });
+    navigate("/report", { state: { answers } });
+  }
+  return <div className="min-h-screen bg-background"><Navbar/><main className="container mx-auto px-4 py-10 max-w-2xl">
+    <h1 className="text-2xl font-display font-bold mb-3">Personalized Mouse Control Planner</h1>
+    <p className="text-sm text-muted-foreground mb-6">{PLANNER_LIMITATION}</p>
+    <p className="text-sm mb-4" aria-live="polite">Step {stepIndex + 1} of {quizSteps.length}: {current.category}</p>
+    <fieldset className="border-0 p-0 min-w-0"><legend className="text-xl font-semibold mb-3">{current.question}</legend>
+      {current.subtitle && <p className="text-sm text-muted-foreground mb-5">{current.subtitle}</p>}
+      <div className="grid gap-3 sm:grid-cols-2">{current.options.map(option => <label key={option.id} className="flex gap-3 items-start border border-border rounded-xl p-4 cursor-pointer focus-within:ring-2 focus-within:ring-primary">
+        <input className="mt-1" type={current.type === "multi" ? "checkbox" : "radio"} name={current.id} value={option.id} checked={Array.isArray(value) ? value.includes(option.id) : value === option.id} onChange={() => select(option.id)}/>
+        <span><span className="block font-medium">{option.label}</span>{option.description && <span className="block text-sm text-muted-foreground mt-1">{option.description}</span>}</span>
+      </label>)}</div>
+    </fieldset>
+    <div className="flex justify-between gap-4 mt-8"><Button variant="outline" onClick={() => setStepIndex(Math.max(0, stepIndex - 1))} disabled={stepIndex === 0}>Back</Button><Button variant="hero" onClick={next} disabled={!valid}>{stepIndex === quizSteps.length - 1 ? "View my plan" : "Next"}</Button></div>
+    <p className="text-xs text-muted-foreground mt-6">No name, email, address or health details are needed to view this plan. Download a copy before leaving the report page.</p>
+  </main></div>;
 }

@@ -1,24 +1,29 @@
-import { QuizAnswers } from "./quiz-data";
+import type { QuizAnswers } from "./quiz-data";
+
+export const PLANNER_LIMITATION = "This planning tool cannot diagnose an infestation, identify a species with certainty, estimate the number of mice, assess disease risk or guarantee a clearance date.";
+export const SOURCES = [
+  { label: "CDC: cleaning up after rodents", url: "https://www.cdc.gov/healthy-pets/rodent-control/clean-up.html" },
+  { label: "CDC: trapping rodents", url: "https://www.cdc.gov/healthy-pets/rodent-control/trap-up.html" },
+  { label: "CDC: sealing entry gaps", url: "https://www.cdc.gov/healthy-pets/rodent-control/seal-up.html" },
+  { label: "UC IPM: house mouse management", url: "https://ipm.ucanr.edu/home-and-landscape/house-mouse/" },
+];
 
 export interface ReportData {
-  species: {
-    name: string;
-    scientificName: string;
-    description: string;
-    behavior: string;
-    diet: string;
-    reproductionRate: string;
-  };
-  severity: number;
+  methodVersion: "2026-10-01";
+  physicalSigns: string[];
+  uncertainSigns: string[];
+  professionalHelp: string[];
+  // Null legacy fields preserve the saved-report shape without inventing measurements.
+  severity: null;
+  estimatedPopulation: { min: null; max: null };
+  populationIn30Days: { min: null; max: null };
+  urgencyDays: null;
   severityLabel: string;
   severityDescription: string;
-  estimatedPopulation: { min: number; max: number };
+  species: { name: string; scientificName: string; description: string; behavior: string; diet: string; reproductionRate: string };
   healthRisks: string[];
   entryPoints: string[];
-  urgencyDays: number;
-  populationIn30Days: { min: number; max: number };
   immediateActions: string[];
-  // Premium content (shown blurred for free users)
   roomByRoomStrategy: string[];
   shoppingList: { name: string; reason: string; affiliateUrl?: string }[];
   eliminationTimeline: { day: string; action: string }[];
@@ -26,276 +31,94 @@ export interface ReportData {
   preventionCalendar: { month: string; task: string }[];
 }
 
-export function generateReport(answers: QuizAnswers): ReportData {
-  const evidence = (answers.evidence as string[]) || [];
-  const locations = (answers.location as string[]) || [];
-  const timeline = answers.timeline as string;
-  const homeType = answers.home_type as string;
-  const surroundings = answers.surroundings as string;
-  const household = (answers.household as string[]) || [];
-  const previous = (answers.previous as string[]) || [];
-  const homeAge = answers.home_age as string;
-  const droppingsDetail = answers.droppings_detail as string;
-  const sightingDetail = answers.sighting_detail as string;
-  const attractants = (answers.attractants as string[]) || [];
-  const budget = answers.budget as string;
-  const foodStorage = answers.food_storage as string;
+const physical: Record<string, string> = {
+  droppings: "Possible rodent droppings reported; identity and age are not established by appearance alone.",
+  gnaw_marks: "Chewing damage reported; inspect without touching damaged wiring or disturbing contamination.",
+  nesting: "Possible nesting material reported; do not disturb it dry.",
+  sighting: "A rodent sighting reported; this does not establish the total population or exact species.",
+  tracks: "Possible tracks reported; compare with other physical evidence.",
+};
+const uncertain: Record<string, string> = {
+  sounds: "Scratching or other noises reported; noise alone does not confirm rodents or pinpoint a wall cavity.",
+  urine_smell: "Odor reported; odor alone does not establish its source, animal numbers or disease risk.",
+  grease_marks: "Smudges reported; marks alone do not confirm current rodent activity.",
+};
+const hazards: Record<string, string> = {
+  damaged_wiring: "Reported damaged wiring: keep away from it and arrange assessment by a qualified electrician. Smoke, sparks or burning smells require an emergency response.",
+  ventilation: "Reported contamination in heating/cooling ducts: do not clean the duct system yourself. Contact a qualified rodent-control and duct-cleaning service.",
+  heavy_contamination: "Reported extensive or inaccessible contamination: keep people and pets out and seek qualified cleanup advice before disturbing it.",
+};
+const rooms: Record<string, string> = {
+  kitchen: "Kitchen: inspect accessible cabinet edges and plumbing penetrations; protect food and food-contact surfaces. Do not move connected appliances unsafely.",
+  attic: "Attic: inspect only from safe, accessible locations. Do not step on unsupported ceilings or disturb insulation and waste.",
+  basement: "Basement: inspect visible perimeter gaps and stored food; reduce accessible clutter after safe cleanup.",
+  garage: "Garage: inspect door seals and storage areas; keep pet food and seed in robust, tightly closed containers.",
+  bedroom: "Bedroom: inspect accessible edges and remove food; keep traps inaccessible to children and pets.",
+  walls: "Walls: inspect accessible room edges on either side. Sounds cannot pinpoint a nest; do not cut drywall or put loose poison into a void.",
+  bathroom: "Bathroom: inspect accessible gaps around plumbing without disturbing electrical or building services.",
+  living_room: "Living room: inspect accessible edges and furniture surroundings; remove food debris.",
+  crawlspace: "Crawl space: use a professional when access, structural condition or contamination makes inspection unsafe.",
+  laundry: "Laundry: inspect accessible pipe penetrations and door seals. Do not obstruct dryer exhaust or install a lint-catching screen.",
+};
+const selected = (input: unknown, allowed: Record<string, string>): string[] =>
+  Array.isArray(input) ? [...new Set(input.filter((v): v is string => typeof v === "string" && Object.prototype.hasOwnProperty.call(allowed, v)))].map(v => allowed[v]) : [];
+const includes = (input: unknown, item: string): boolean => Array.isArray(input) && input.includes(item);
 
-  // Determine species
-  const isRural = surroundings === "rural";
-  const hasAttic = locations.includes("attic");
-  const hasBasement = locations.includes("basement");
-  const isLargeRodent = droppingsDetail === "large_blunt";
-
-  let species;
-  if (isLargeRodent && (hasBasement || locations.includes("garage"))) {
-    species = {
-      name: "Norway Rat",
-      scientificName: "Rattus norvegicus",
-      description: "Large, stocky rodent with a blunt nose, small ears, and a tail shorter than its body. Typically brown or gray.",
-      behavior: "Ground-dwelling, prefers basements and ground floors. Strong swimmers. Creates extensive burrow systems near foundations.",
-      diet: "Omnivorous — meats, grains, fruits, garbage. Needs water daily.",
-      reproductionRate: "4-6 litters per year, 6-12 pups each. Extremely rapid population growth.",
-    };
-  } else if (isLargeRodent && hasAttic) {
-    species = {
-      name: "Roof Rat",
-      scientificName: "Rattus rattus",
-      description: "Sleek, dark-colored rat with large ears, pointed nose, and a tail longer than its body. Agile climber.",
-      behavior: "Excellent climbers that prefer attics, rafters, and upper floors. Nests in trees and dense vegetation outdoors.",
-      diet: "Fruits, nuts, vegetables, grains. Prefers fresh food over garbage.",
-      reproductionRate: "3-5 litters per year, 5-8 pups each.",
-    };
-  } else if (isRural && (hasAttic || locations.includes("garage"))) {
-    species = {
-      name: "Deer Mouse",
-      scientificName: "Peromyscus maniculatus",
-      description: "A small, bicolored mouse with white feet and belly. Common in rural and semi-rural areas. Known carrier of Hantavirus.",
-      behavior: "Primarily nocturnal. Excellent climbers that prefer elevated nesting sites in attics, garages, and outbuildings. They cache food in hidden spots.",
-      diet: "Seeds, nuts, berries, insects, and small invertebrates. Will eat stored grains and pet food.",
-      reproductionRate: "2-4 litters per year, 3-8 pups each. Can reproduce year-round indoors.",
-    };
-  } else if (hasBasement || locations.includes("garage")) {
-    species = {
-      name: "Norway Rat",
-      scientificName: "Rattus norvegicus",
-      description: "Large, stocky rodent with a blunt nose, small ears, and a tail shorter than its body. Typically brown or gray.",
-      behavior: "Ground-dwelling, prefers basements and ground floors. Strong swimmers. Creates extensive burrow systems near foundations.",
-      diet: "Omnivorous — meats, grains, fruits, garbage. Needs water daily.",
-      reproductionRate: "4-6 litters per year, 6-12 pups each. Extremely rapid population growth.",
-    };
-  } else if (hasAttic) {
-    species = {
-      name: "Roof Rat",
-      scientificName: "Rattus rattus",
-      description: "Sleek, dark-colored rat with large ears, pointed nose, and a tail longer than its body. Agile climber.",
-      behavior: "Excellent climbers that prefer attics, rafters, and upper floors. Nests in trees and dense vegetation outdoors.",
-      diet: "Fruits, nuts, vegetables, grains. Prefers fresh food over garbage.",
-      reproductionRate: "3-5 litters per year, 5-8 pups each.",
-    };
-  } else {
-    species = {
-      name: "House Mouse",
-      scientificName: "Mus musculus",
-      description: "Small, dusty gray mouse with large ears, small eyes, and a long tail. The most common household rodent worldwide.",
-      behavior: "Curious and exploratory. Travels along walls and edges. Nests close to food sources, often in wall voids, cabinets, and appliances.",
-      diet: "Grains, seeds, sweets, and just about anything. Needs very little water — gets moisture from food.",
-      reproductionRate: "5-10 litters per year, 5-6 pups each. Can breed at just 6 weeks old.",
-    };
-  }
-
-  // Calculate severity (1-10) with enhanced scoring
-  let severity = 2;
-  if (evidence.includes("sighting")) severity += 2;
-  if (evidence.includes("droppings")) severity += 1;
-  if (evidence.includes("gnaw_marks")) severity += 1;
-  if (evidence.includes("nesting")) severity += 2;
-  if (evidence.includes("grease_marks")) severity += 1;
-  if (evidence.includes("sounds")) severity += 1;
-  if (evidence.includes("urine_smell")) severity += 1;
-  if (evidence.includes("tracks")) severity += 1;
-  if (locations.length > 2) severity += 1;
-  if (locations.length > 4) severity += 1;
-  if (timeline === "months" || timeline === "ongoing") severity += 2;
-  else if (timeline === "month") severity += 1;
-  if (previous.includes("professional")) severity += 1;
-  if (sightingDetail === "one_day") severity += 1;
-  if (sightingDetail === "multiple") severity += 2;
-  if (droppingsDetail === "scattered") severity += 1;
-  if (homeAge === "old" || homeAge === "very_old") severity += 1;
-  if (attractants.length > 2) severity += 1;
-  severity = Math.min(10, Math.max(1, severity));
-
-  const severityLabel = severity <= 3 ? "Mild" : severity <= 6 ? "Moderate" : severity <= 8 ? "Significant" : "Severe";
-
-  const severityDescriptions: Record<string, string> = {
-    Mild: `Your score is ${severity}/10 — This appears to be an early-stage situation, likely 1-2 mice exploring your home. Catching it now means the easiest and cheapest fix. Act within the next 14 days for best results.`,
-    Moderate: `Your score is ${severity}/10 — This is a moderate, active infestation that has likely been developing for 3-5 weeks. Without intervention, the population could double within 30 days.`,
-    Significant: `Your score is ${severity}/10 — This is a well-established infestation with multiple nesting sites. The population is actively growing and spreading through your home. Immediate, multi-pronged action is critical.`,
-    Severe: `Your score is ${severity}/10 — This is a severe infestation requiring aggressive, immediate action. Multiple generations are likely present with established travel routes and nesting sites throughout your home.`,
-  };
-
-  // Population estimates
-  const baseMin = severity <= 3 ? 1 : severity <= 6 ? 4 : severity <= 8 ? 10 : 20;
-  const baseMax = severity <= 3 ? 3 : severity <= 6 ? 12 : severity <= 8 ? 30 : 50;
-
-  // Health risks
-  const healthRisks: string[] = [];
-  if (species.name === "Deer Mouse") {
-    healthRisks.push("HIGH RISK: Hantavirus -- Deer mice are the primary carrier. Avoid sweeping droppings (aerosolizes virus). Use wet cleanup methods only.");
-  }
-  healthRisks.push("Salmonella & E. coli contamination of food surfaces and utensils");
-  healthRisks.push("Leptospirosis risk from urine on surfaces");
-  if (evidence.includes("droppings") && locations.includes("kitchen")) {
-    healthRisks.push("CRITICAL: Kitchen contamination detected -- sanitize all food preparation surfaces immediately");
-  }
-  if (household.includes("kids")) {
-    healthRisks.push("Children are especially vulnerable to rodent-borne diseases due to floor play and hand-to-mouth behavior");
-  }
-  if (household.includes("pregnant")) {
-    healthRisks.push("Pregnant individuals should avoid direct contact with mouse droppings -- risk of Lymphocytic choriomeningitis (LCMV)");
-  }
-  if (household.includes("allergies")) {
-    healthRisks.push("Mouse dander and droppings are potent allergens and can trigger asthma attacks");
-  }
-  if (evidence.includes("urine_smell")) {
-    healthRisks.push("Strong urine odor indicates high concentration of mice — increased airborne allergen and pathogen risk");
-  }
-
-  // Entry points
-  const entryPoints: string[] = [];
-  if (homeType === "detached" || homeType === "cabin") {
-    entryPoints.push("Foundation gaps and cracks (mice enter through openings as small as ¼ inch)");
-    entryPoints.push("Gaps around utility pipes and wires entering the home");
-    entryPoints.push("Garage door seal gaps");
-  }
-  if (homeType === "townhouse") {
-    entryPoints.push("Shared walls with adjacent units — mice travel between connected homes");
-    entryPoints.push("Utility chase pipes between floors");
-  }
-  if (homeType === "apartment") {
-    entryPoints.push("Gaps around plumbing under sinks — the #1 entry point in apartments");
-    entryPoints.push("Spaces behind electrical outlets on shared walls");
-    entryPoints.push("Gaps where pipes enter from adjacent units");
-  }
-  if (homeType === "mobile") {
-    entryPoints.push("Gaps in skirting and underbelly — mobile homes have many access points below");
-    entryPoints.push("Plumbing penetrations through the floor");
-  }
-  entryPoints.push("Door sweeps and weatherstripping gaps");
-  entryPoints.push("Dryer vent and exhaust fan openings without proper covers");
-  if (hasAttic) entryPoints.push("Roof vents, soffit gaps, and chimney flashing");
-  if (homeAge === "old" || homeAge === "very_old") {
-    entryPoints.push("Settling cracks in older foundations and walls — age-related gaps are common entry points");
-  }
-
-  // Immediate actions
-  const immediateActions: string[] = [];
-  const hasPets = household.includes("pets_dog") || household.includes("pets_cat");
-  const hasKids = household.includes("kids");
-
-  if (evidence.includes("droppings") && locations.includes("kitchen")) {
-    immediateActions.push("Tonight: Put on gloves and a mask. Spray droppings with a bleach solution (1:10), wait 5 minutes, then wipe up with paper towels. Dispose in a sealed bag. Do NOT sweep or vacuum dry droppings.");
-  }
-
-  if (locations.includes("kitchen") || foodStorage === "open" || foodStorage === "mixed") {
-    immediateActions.push("Move all open food (including pet food, bread, cereal) into hard-sided sealed containers or the refrigerator. Mice can chew through bags and cardboard in minutes.");
-  }
-
-  if (hasPets || hasKids) {
-    immediateActions.push(`Set 2-3 enclosed snap trap stations along walls in active areas. These protect ${hasKids ? "children" : ""}${hasKids && hasPets ? " and " : ""}${hasPets ? "pets" : ""} from the snap mechanism while being effective. Bait with a pea-sized amount of peanut butter.`);
-  } else {
-    immediateActions.push("Set 3-4 snap traps perpendicular to walls in active areas — the trigger end should touch the wall. Bait with a pea-sized dab of peanut butter. Place 2 behind the refrigerator, 1 under the kitchen sink, and 1 near the most active evidence area.");
-  }
-
-  if (immediateActions.length < 3) {
-    immediateActions.push("Seal the most obvious gap you can find tonight using steel wool stuffed tightly into the opening, then covered with caulk. Focus on gaps around pipes under sinks first — the #1 entry point.");
-  }
-
-  // Premium content — room-by-room strategy
-  const roomByRoomStrategy: string[] = [];
-  if (locations.includes("kitchen")) {
-    roomByRoomStrategy.push("KITCHEN: Remove all food from lower cabinets. Clean with enzymatic cleaner. Place 2 snap traps behind fridge, 1 under sink. Seal pipe gaps with steel wool + caulk. Install cabinet door bumpers.");
-  }
-  if (locations.includes("attic")) {
-    roomByRoomStrategy.push("ATTIC: Wear N95 mask. Set 4-6 snap traps along rafters and walls. Seal all soffit gaps with hardware cloth. Remove any nesting material with gloves.");
-  }
-  if (locations.includes("basement")) {
-    roomByRoomStrategy.push("BASEMENT: Focus on foundation-level entry points. Set traps along walls every 6-8 feet. Seal utility penetrations. Remove clutter that provides harborage.");
-  }
-  if (locations.includes("garage")) {
-    roomByRoomStrategy.push("GARAGE: Replace worn door seals. Set traps near storage areas. Move bird seed and pet food to sealed metal containers. Seal gaps around utility connections.");
-  }
-  if (locations.includes("bedroom")) {
-    roomByRoomStrategy.push("BEDROOM: Set traps behind furniture along walls. Check for entry points around heating vents and baseboards. Remove any food or wrappers from the room.");
-  }
-  if (roomByRoomStrategy.length === 0) {
-    roomByRoomStrategy.push("Focus on the kitchen and areas where you've seen the most evidence. Set traps along walls and behind appliances.");
-  }
-
-  // Shopping list with affiliate-ready links
-  const shoppingList: { name: string; reason: string; affiliateUrl?: string }[] = [];
-  if (hasPets || hasKids) {
-    shoppingList.push({ name: "Tomcat Press 'N Set Enclosed Trap (6-pack)", reason: "Child & pet safe enclosed snap traps", affiliateUrl: "https://www.amazon.com/s?k=tomcat+press+n+set+mouse+trap+enclosed" });
-  } else {
-    shoppingList.push({ name: "Victor M150 Snap Traps (12-pack)", reason: "Most effective traditional snap trap", affiliateUrl: "https://www.amazon.com/s?k=victor+m150+snap+trap+mouse" });
-  }
-  shoppingList.push({ name: "Xcluder Steel Wool Fill Fabric", reason: "Mice can't chew through -- stuff into gaps", affiliateUrl: "https://www.amazon.com/s?k=xcluder+steel+wool+fill+fabric" });
-  shoppingList.push({ name: "DAP Alex Plus Caulk", reason: "Seal over steel wool for permanent barrier", affiliateUrl: "https://www.amazon.com/s?k=DAP+alex+plus+caulk" });
-  shoppingList.push({ name: "Clorox Bleach Spray", reason: "Sanitize contaminated surfaces (1:10 dilution)", affiliateUrl: "https://www.amazon.com/s?k=clorox+clean-up+bleach+spray" });
-  shoppingList.push({ name: "N95 Respirator Masks (10-pack)", reason: "Protection during cleanup of droppings", affiliateUrl: "https://www.amazon.com/s?k=3M+N95+respirator+mask" });
-  shoppingList.push({ name: "Nitrile Disposable Gloves", reason: "Handle droppings and traps safely", affiliateUrl: "https://www.amazon.com/s?k=nitrile+disposable+gloves" });
-  if (foodStorage === "open" || foodStorage === "mixed") {
-    shoppingList.push({ name: "Glass Food Storage Containers Set", reason: "Mouse-proof your food supply", affiliateUrl: "https://www.amazon.com/s?k=glass+food+storage+containers+airtight" });
-  }
-
-  // Elimination timeline
-  const eliminationTimeline = [
-    { day: "Day 1 (Tonight)", action: "Clean contaminated areas, set initial traps, seal most obvious entry point" },
-    { day: "Day 2-3", action: "Check traps twice daily, reset as needed, identify additional entry points" },
-    { day: "Day 4-7", action: "Seal all identified entry points with steel wool + caulk. Relocate traps if no catches" },
-    { day: "Day 7-14", action: "Continue monitoring. Move traps to new locations. Deep clean affected areas" },
-    { day: "Day 14-21", action: "Reduce trap count if no activity. Begin decontamination protocol" },
-    { day: "Day 21-30", action: "Final inspection. Set monitoring traps. Begin prevention protocol" },
+export function generateReport(input: QuizAnswers | unknown): ReportData {
+  const a: Record<string, unknown> = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const physicalSigns = selected(a.evidence, physical);
+  const uncertainSigns = selected(a.evidence, uncertain);
+  const professionalHelp = selected(a.evidence, hazards);
+  const havePhysical = physicalSigns.length > 0;
+  const householdProtection = ["kids", "pets_dog", "pets_cat", "pets"].some(v => includes(a.household, v));
+  const multiunit = ["apartment", "townhouse"].includes(String(a.home_type));
+  const entryPoints = [
+    "Inspect accessible gaps around pipes, doors and the building perimeter. These are inspection prompts, not confirmed entry routes.",
+    "For small non-service gaps, CDC describes steel wool secured with caulk; larger openings may need metal, hardware cloth or another suitable repair. Match materials to the assembly.",
+    "Do not fill drainage paths, block ventilation or put conductive packing near wiring. Use qualified help for utilities, dryer exhaust and fire-rated construction.",
+    ...(multiunit ? ["Coordinate shared-wall and common-area inspection with the owner or building manager; do not alter shared services yourself."] : []),
   ];
-
-  // Decontamination steps
-  const decontaminationSteps = [
-    "Ventilate affected areas for 30 minutes before cleaning (open windows and doors)",
-    "Wear N95 mask and disposable gloves throughout the entire process",
-    "Spray all droppings, nesting material, and contaminated surfaces with bleach solution (1 part bleach : 10 parts water). Let soak 5 minutes",
-    "Wipe up with disposable paper towels. Double-bag in sealed plastic bags for disposal",
-    "NEVER sweep or vacuum dry droppings — this aerosolizes dangerous pathogens",
-    "Mop hard floors with bleach solution. Steam clean carpets in heavily affected areas",
-    "Wash all potentially contaminated fabrics (towels, linens, clothing) in hot water",
-    "Disinfect kitchen surfaces, utensils, and cutting boards that may have been contacted",
+  const immediateActions = [
+    ...professionalHelp,
+    havePhysical ? "Record where signs were seen and inspect nearby accessible areas. After safe cleanup, record any newly appearing signs rather than guessing their age." : "Start with a safe inspection for physical evidence. Do not treat noises or odors alone as an infestation diagnosis.",
+    "Secure food and pet food in robust containers with close-fitting lids; remove accessible food debris and rubbish.",
+    ...(havePhysical ? ["CDC recommends correctly sized snap traps rather than glue or live traps. Follow manufacturer instructions, place them on observed travel routes and check them daily."] : []),
+    householdProtection ? "Choose protected trap locations or appropriate enclosed devices. An enclosure is not a guarantee of child or pet safety; prevent access and follow the label." : "Keep traps out of reach of children, pets and other non-target animals, including visitors.",
+    ...(includes(a.previous, "ultrasonic") || includes(a.previous, "peppermint") ? ["Do not use a scent or ultrasonic device as proof of control; prioritize physical exclusion, food management and trapping where activity is confirmed."] : []),
   ];
-
-  // Prevention calendar
-  const preventionCalendar = [
-    { month: "January", task: "Check all door sweeps and weatherstripping. Inspect attic for signs of nesting." },
-    { month: "March", task: "Spring cleaning — deep clean behind appliances, check for new droppings." },
-    { month: "May", task: "Inspect exterior foundation for new cracks. Trim vegetation 3 feet from home." },
-    { month: "July", task: "Check outdoor attractants (compost, bird feeders). Clean garage thoroughly." },
-    { month: "September", task: "CRITICAL: Pre-fall inspection. Seal all gaps before mice seek winter shelter." },
-    { month: "November", task: "Set monitoring traps in attic, basement, garage. Check stored food for contamination." },
-  ];
-
   return {
-    species,
-    severity,
-    severityLabel,
-    severityDescription: severityDescriptions[severityLabel],
-    estimatedPopulation: { min: baseMin, max: baseMax },
-    healthRisks,
-    entryPoints,
-    urgencyDays: severity <= 3 ? 14 : severity <= 6 ? 7 : 3,
-    populationIn30Days: { min: Math.round(baseMin * 1.8), max: Math.round(baseMax * 2.5) },
-    immediateActions,
-    roomByRoomStrategy,
-    shoppingList,
-    eliminationTimeline,
-    decontaminationSteps,
-    preventionCalendar,
+    methodVersion: "2026-10-01", physicalSigns, uncertainSigns, professionalHelp,
+    severity: null, estimatedPopulation: { min: null, max: null }, populationIn30Days: { min: null, max: null }, urgencyDays: null,
+    severityLabel: professionalHelp.length ? "Reported conditions need qualified attention" : havePhysical ? "Physical signs reported: inspect and verify" : "Activity not confirmed by physical evidence",
+    severityDescription: "This summary reflects selected observations, not an inspection of your property. " + PLANNER_LIMITATION,
+    species: { name: "Species not established", scientificName: "Not determined", description: "Room location, noise, odor and pellet appearance cannot establish exact species. Clear observations or professional identification may be needed.", behavior: "Inspect actual activity rather than relying on an assumed species.", diet: "Protect accessible food regardless of species.", reproductionRate: "Not estimated for this property." },
+    healthRisks: ["No disease assessment is made from your answers. For illness following a possible rodent exposure, contact a healthcare professional and explain the exposure.", "Use the cleanup instructions below; do not dry-sweep or vacuum untreated waste.", ...professionalHelp],
+    entryPoints, immediateActions,
+    roomByRoomStrategy: selected(a.location, rooms),
+    shoppingList: [
+      { name: "Appropriate mouse traps and protected placements", reason: "Choose by the animal identified, household access and manufacturer directions; this is not an exact quantity calculation." },
+      { name: "Rubber or plastic gloves and a suitable disinfectant", reason: "Check the disinfectant label, surface compatibility and contact time; never mix cleaning chemicals." },
+      { name: "Materials matched to confirmed entry gaps", reason: "Choose a durable repair appropriate to the gap and building services; a material name alone does not guarantee exclusion." },
+      { name: "Food containers with close-fitting lids", reason: "Use robust containers suitable for the food and storage area." },
+    ],
+    eliminationTimeline: [
+      { day: "Inspect", action: "Record physical evidence and address unsafe conditions before DIY work." },
+      { day: "Control and clean", action: "Reduce food access; use appropriate protected traps and safe wet cleanup. Coordinate entry-gap repairs with control." },
+      { day: "Recheck", action: "Check traps daily and log any newly appearing evidence after cleanup. Adjust placements to observations." },
+      { day: "Review", action: "If signs persist, inaccessible areas are involved or the plan is not working, seek qualified help. No date proves permanent clearance." },
+    ],
+    decontaminationSteps: [
+      "For a home or outbuilding, CDC advises opening doors and windows for 30 minutes and leaving during that ventilation period before cleanup.",
+      "Wear rubber or plastic gloves. Do not dry-sweep, vacuum or blow untreated droppings, urine or nests.",
+      "Thoroughly wet the material with an appropriate disinfectant. Allow 5 minutes or the product label contact time, then use paper towels and place waste in a covered rubbish bin.",
+      "Disinfect the affected hard surfaces as directed. For carcasses and nests, follow CDC's double-bag disposal procedure and local disposal guidance.",
+      "Wash gloved hands before removing gloves, then wash bare hands with soap and warm water. Never mix disinfectants or cleaning chemicals.",
+      "Heavy, inaccessible or ventilation-system contamination needs qualified assessment and additional precautions; this routine checklist is not sufficient for every situation.",
+    ],
+    preventionCalendar: [
+      { month: "During active control", task: "Check traps daily and record location, catches and new evidence." },
+      { month: "After repairs or weather damage", task: "Reinspect accessible seals and the building perimeter without blocking drainage or ventilation." },
+      { month: "Routine household checks", task: "Review food storage, waste handling and accessible areas for new signs; restart inspection when evidence changes." },
+    ],
   };
 }

@@ -1,137 +1,28 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Shield, ArrowRight, CheckCircle2, Loader2, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { submitMiceLead } from "@/lib/miceLead";
 
-interface Props {
-  open: boolean;
-  onSuccess: () => void;
-  severity?: number;
-  species?: string;
-}
-
-export default function EmailCaptureModal({ open, onSuccess, severity, species }: Props) {
+export default function EmailCaptureModal({ open, onSuccess }: { open: boolean; onSuccess: () => void }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isValidEmail) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      await submitMiceLead({
-        email: email.trim().toLowerCase(),
-        name: name.trim() || undefined,
-        severity,
-        species,
-      });
-    } catch (err) {
-      console.error("MiceGoneGuide lead capture failed", err);
-      // We proceed to show the report anyway so the user experience is never blocked by API issues
-    }
-    setLoading(false);
-    onSuccess();
-  };
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/60 backdrop-blur-sm"
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="bg-card rounded-2xl shadow-2xl max-w-md w-full overflow-hidden relative"
-          >
-            {/* Top accent */}
-            <div className="h-1.5 bg-accent-gradient" />
-
-            <div className="p-8">
-              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-5">
-                <Sparkles className="h-7 w-7 text-primary" />
-              </div>
-
-              <h2 className="text-2xl font-display font-bold text-foreground text-center mb-2">
-                Your Mouse Elimination Blueprint is Ready
-              </h2>
-              <p className="text-sm text-muted-foreground text-center mb-6 leading-relaxed">
-                Enter your email to unlock your personalized diagnosis and the premium Blueprint PDF — a practical, printable plan with severity insights, entry-point priorities, safety steps, decision filters, and a 30-day elimination action map.
-              </p>
-
-              <div className="grid grid-cols-2 gap-2 mb-5 text-left">
-                {["Severity score + species ID", "Tonight's containment checklist", "CDC-aligned cleanup steps", "30-day prevention planner"].map((item) => (
-                  <div key={item} className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground flex items-start gap-2">
-                    <FileText className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <Input
-                  type="text"
-                  placeholder="Your name (optional)"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="h-12"
-                  maxLength={100}
-                />
-                <Input
-                  type="email"
-                  placeholder="your@email.com"
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setError(""); }}
-                  className="h-12"
-                  required
-                  maxLength={255}
-                />
-                {error && <p className="text-xs text-destructive">{error}</p>}
-
-                <Button
-                  type="submit"
-                  variant="hero"
-                  size="lg"
-                  className="w-full gap-2"
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ArrowRight className="h-4 w-4" />
-                  )}
-                  {loading ? "Sending Blueprint..." : "Unlock Report + Free Blueprint PDF"}
-                </Button>
-              </form>
-
-              <div className="flex items-center justify-center gap-4 mt-5 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Shield className="h-3 w-3" />
-                  No spam
-                </span>
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" />
-                  PDF after capture
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+  const [consent, setConsent] = useState(false);
+  if (!open) return null;
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!consent || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError("Enter a valid email and select the subscription checkbox."); return; }
+    setLoading(true); setError("");
+    try { await submitMiceLead({ email: email.trim().toLowerCase(), name: name.trim() || undefined }); onSuccess(); }
+    catch { setError("We could not save your request. Your plan and PDF remain available without subscribing."); }
+    finally { setLoading(false); }
+  }
+  return <section className="glass-card rounded-2xl p-6" aria-labelledby="email-heading"><h2 id="email-heading" className="text-xl font-semibold mb-3">Optional email check-ins</h2><p className="text-sm mb-4">Your plan is already available. Email check-ins are general reminders, not a diagnosis or a clearance guarantee.</p><form onSubmit={submit} className="space-y-4">
+    <label className="block text-sm">Name (optional)<Input autoComplete="given-name" value={name} maxLength={100} onChange={e => setName(e.target.value)}/></label>
+    <label className="block text-sm">Email<Input type="email" autoComplete="email" value={email} maxLength={255} required onChange={e => setEmail(e.target.value)}/></label>
+    <label className="flex gap-3 text-sm"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}/>Send me mouse-control planning emails. This submits my name and email to the site's email service.</label>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    <Button type="submit" disabled={loading || !consent}>{loading ? "Saving request..." : "Request email check-ins"}</Button>
+  </form></section>;
 }

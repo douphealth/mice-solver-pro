@@ -1,42 +1,14 @@
-/**
- * Lightweight analytics tracker — drop-in ready for PostHog, Plausible, or GA4.
- * Currently logs to console. Replace with your analytics provider.
- */
-
-type EventName =
-  | "quiz_started"
-  | "quiz_completed"
-  | "report_viewed"
-  | "pdf_downloaded"
-  | "email_captured"
-  | "premium_checkout_clicked"
-  | "page_viewed";
-
-interface EventProperties {
-  [key: string]: string | number | boolean | undefined;
+/** Consent-gated instrumentation. An installed analytics adapter must be supplied explicitly. */
+type EventName = "quiz_started" | "quiz_completed" | "planner_start" | "planner_complete" | "report_viewed" | "pdf_downloaded" | "email_captured" | "premium_checkout_clicked" | "page_viewed" | "affiliate_click";
+type SafeProperties = { steps?: number; path?: string };
+type Adapter = (event: EventName, properties: SafeProperties) => void;
+let adapter: Adapter | null = null;
+let consent = false;
+export function configureAnalytics(next: Adapter | null, hasConsent: boolean): void { adapter = next; consent = hasConsent; }
+export function trackEvent(event: EventName, properties: Record<string, unknown> = {}): void {
+  const safe: SafeProperties = {};
+  if (typeof properties.steps === "number" && Number.isInteger(properties.steps) && properties.steps >= 0 && properties.steps <= 100) safe.steps = properties.steps;
+  if (typeof properties.path === "string" && /^\/(?:quiz|report|tools\/(?:calculator|entry-points))?$/.test(properties.path)) safe.path = properties.path;
+  try { if (consent && adapter) adapter(event, safe); } catch { /* Measurement must never break planning. */ }
 }
-
-export function trackEvent(event: EventName, properties?: EventProperties) {
-  try {
-    // PostHog integration (uncomment when ready):
-    // if (typeof window !== 'undefined' && (window as any).posthog) {
-    //   (window as any).posthog.capture(event, properties);
-    // }
-
-    // Plausible integration (uncomment when ready):
-    // if (typeof window !== 'undefined' && (window as any).plausible) {
-    //   (window as any).plausible(event, { props: properties });
-    // }
-
-    // Console logging for development
-    if (import.meta.env.DEV) {
-      console.log(`[Analytics] ${event}`, properties || "");
-    }
-  } catch {
-    // Analytics should never break the app
-  }
-}
-
-export function trackPageView(path: string) {
-  trackEvent("page_viewed", { path });
-}
+export function trackPageView(path: string): void { trackEvent("page_viewed", { path }); }

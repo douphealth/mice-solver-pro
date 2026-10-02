@@ -12,29 +12,11 @@ import AuthPage from "./pages/AuthPage.tsx";
 import DashboardPage from "./pages/DashboardPage.tsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
 import NotFound from "./pages/NotFound.tsx";
-
+import RouteMetadata from "./components/RouteMetadata";
 const queryClient = new QueryClient();
-
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/quiz" element={<QuizPage />} />
-          <Route path="/report" element={<ReportPage />} />
-          <Route path="/tools/calculator" element={<CalculatorPage />} />
-          <Route path="/tools/entry-points" element={<EntryPointsPage />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/payment-success" element={<PaymentSuccessPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <QueryClientProvider client={queryClient}><TooltipProvider><Toaster /><Sonner /><BrowserRouter><RouteMetadata /><Routes>
+    <Route path="/" element={<Index />} /><Route path="/quiz" element={<QuizPage />} /><Route path="/report" element={<ReportPage />} /><Route path="/tools/calculator" element={<CalculatorPage />} /><Route path="/tools/entry-points" element={<EntryPointsPage />} /><Route path="/auth" element={<AuthPage />} /><Route path="/dashboard" element={<DashboardPage />} /><Route path="/payment-success" element={<PaymentSuccessPage />} /><Route path="*" element={<NotFound />} />
+  </Routes></BrowserRouter></TooltipProvider></QueryClientProvider>
 );
-
 export default App;
