@@ -1,4 +1,0 @@
-import { SOURCES, type ReportData } from "@/lib/report-generator";
-export default function ReportActionsSection({ report }: { report: ReportData }) {
-  return <section className="glass-card rounded-2xl p-6 md:p-8"><h2 className="text-xl font-display font-bold mb-3">Your next actions</h2><ol className="list-decimal pl-5 text-sm space-y-3">{report.immediateActions.map(x => <li key={x}>{x}</li>)}</ol><a className="inline-block mt-4 underline text-primary" href={SOURCES[1].url}>{SOURCES[1].label}</a><details className="mt-5 border-t pt-4"><summary className="cursor-pointer font-semibold">Safe cleanup checklist</summary><ol className="list-decimal pl-5 text-sm space-y-3 mt-4">{report.decontaminationSteps.map(x => <li key={x}>{x}</li>)}</ol><a className="inline-block mt-4 underline text-primary" href={SOURCES[0].url}>{SOURCES[0].label}</a></details></section>;
-}

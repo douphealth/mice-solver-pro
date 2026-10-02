@@ -1,0 +1,28 @@
+{
+  // Production worker for https://elimination.micegoneguide.com. The zone route
+  // "elimination.micegoneguide.com/*" is managed in the Cloudflare dashboard and is intentionally not set here.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "micegoneguide-elimination-selfhosted-proxy",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "keep_vars": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "none"
+  },
+  "observability": { "enabled": true },
+  "vars": {
+    "PUBLIC_ORIGIN": "https://elimination.micegoneguide.com",
+    "RELEASE": "pro-workspace-2026-10-02",
+    // Live Stripe Payment Link and product for the Pro Masterplan (checked against Stripe on 2026-10-02).
+    "PAYMENT_LINK_ID": "plink_1UCvLgGCqwm95OGXtz60RBjB",
+    "PRODUCT_ID": "prod_UGIuz2PLtNFw3p",
+    "PRICE_ID": "price_1THmIQGCqwm95OGXRypTpK2X",
+    "BREVO_LIST_ID": "8",
+    "SENDER_EMAIL": "admin@micegoneguide.com"
+  }
+}

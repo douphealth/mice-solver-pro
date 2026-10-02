@@ -26,3 +26,9 @@ dist-ssr
 # Bun lockfiles
 bun.lock
 bun.lockb
+
+.dev.vars
+evidence/
+test-results/
+playwright-report/
+.wrangler/

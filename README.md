@@ -1,36 +1,85 @@
-# MiceGoneGuide - Personalized Mouse Control Planner
+# MiceGoneGuide Mouse Control Planner
 
-This React/TypeScript app organizes inspection, trapping, cleanup and exclusion steps around user-reported observations. It does not diagnose an infestation, identify a species, estimate population, assess disease risk or guarantee clearance.
+Live at <https://elimination.micegoneguide.com>. A free, source-backed mouse control planner plus an optional one-time-purchase **Pro Masterplan** workspace.
 
-## Features
-- Six-step observation checklist with back navigation and validation.
-- Immediate free plan, practical safety guidance and locally generated PDF.
-- Observation/action planner at the existing calculator URL.
-- Property-specific entry-gap inspection prompts.
-- Existing authentication and Stripe checkout integration retained.
-- Optional email reminders; this is not a claim of guaranteed email delivery.
+- **Free:** seven-question quiz → personalised plan (today / this week / ongoing), four interactive tools, PDF, calendar reminders. No account, no email.
+- **Pro ($9.99, Stripe Payment Link):** dated 30-day schedule, full room protocols, trap layout helper, evidence log with chart/CSV, sealing materials guide, supply list, pro-call kit, prevention calendar, print-ready PDF workbook.
+- **Honesty rules** (enforced by tests and `npm run guardrails`): no diagnosis, no species ID, no mouse counts, no scores, no invented statistics or reviews, no guaranteed results. Every recommendation cites the CDC rodent-control pages or UC IPM house-mouse notes (reviewed 2 October 2026).
 
-## Development and verification
+## Architecture
+
+```
+Browser (React + Vite + Tailwind)  ──►  Cloudflare Worker  ──►  Stripe API   (verify purchases)
+        static app in dist/               worker/index.ts   └►  Brevo API    (email check-ins, access links)
+```
+
+One Worker (`micegoneguide-elimination-selfhosted-proxy`, route `elimination.micegoneguide.com/*`) serves the built app as static assets **and** the API. There is no database and no user account: access is decided by Stripe on every visit.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/entitlement?session_id=` | Is this Checkout Session a paid, unrefunded purchase of the Pro product? |
+| `GET /api/pro-pack?session_id=` | Returns the Pro content **only** if the above is true (`402` otherwise). The Pro content lives in `worker/pro-content.ts` and is not in the public JS bundle. |
+| `POST /api/restore` | Emails an access link to the address used at checkout (same response whether or not a purchase exists). |
+| `POST /api/lead` | Optional email check-ins (Brevo list + welcome email). Consent required, honeypot, rate limited. |
+| `POST /api/stripe-webhook` | Signed Stripe webhook; emails the access link after a paid checkout. Optional hardening: access never depends on it. |
+| `GET /api/health` | Configuration status (booleans only). |
+
+### How a purchase works
+
+1. `/pro` links to the live Stripe Payment Link (`plink_1UCvLgGCqwm95OGXtz60RBjB`, $9.99, success URL `/payment-success?session_id={CHECKOUT_SESSION_ID}`).
+2. Stripe returns the buyer to `/payment-success`. The page calls `/api/entitlement`; the Worker retrieves the session from Stripe and checks: product/payment link, `mode=payment`, `status=complete`, `payment_status=paid`, and (when the key allows) that the charge is not refunded or disputed.
+3. Only then is the session id stored in the browser and `/pro` opens. Every later visit re-verifies, so a refund ends access. If the server can't be reached, a saved copy opens offline with a visible notice.
+4. The access link is emailed (webhook, if configured) and can be re-sent from `/restore`.
+
+A return URL, a click or a stored id **never** grants access by itself.
+
+## Configuration (Cloudflare Worker secrets, never committed)
+
+```sh
+npx wrangler secret put STRIPE_SECRET_KEY      # restricted key, read-only, see below
+npx wrangler secret put STRIPE_WEBHOOK_SECRET  # optional; signing secret of the webhook endpoint
+npx wrangler secret put BREVO_API_KEY          # already set on the existing Worker
+```
+
+`STRIPE_SECRET_KEY` should be a **restricted** key created in Stripe → Developers → API keys with *read* access to **Checkout Sessions** (required) and **PaymentIntents + Charges** (enables refund detection). Without charge access the app still verifies payments and reports `refundCheck: false`.
+
+Optional webhook: add an endpoint `https://elimination.micegoneguide.com/api/stripe-webhook` for `checkout.session.completed` and `checkout.session.async_payment_succeeded`, and store its signing secret as `STRIPE_WEBHOOK_SECRET`.
+
+Plain variables (payment link id, product id, list id, sender) live in `wrangler.jsonc`.
+
+## Develop and test
+
 ```sh
 npm ci --ignore-scripts
-npm run build
-npx tsc --noEmit -p tsconfig.app.json
-npm test
-node scripts/trust-regression.mjs
+npm run dev                 # Vite dev server (UI only; /api needs the Worker)
+npm run build && npm run dev:worker   # full stack on http://127.0.0.1:8787 using .dev.vars
+npm run mock:services       # local Stripe + Brevo stand-ins (port 9911)
+npm run check               # typecheck + unit/API tests + guardrails + build
 npx playwright install chromium
-npx playwright test --config playwright.trust.config.ts
+npm run test:e2e            # real browser, desktop + mobile, incl. axe accessibility audit
 ```
-Browser regression tests block non-localhost requests: no real payments, emails or accounts are created. PDFs and screenshots are saved under `evidence/`.
 
-## Deployment gates
-This change is staged, not a declaration that production was updated. Verify the custom domain's actual Cloudflare Pages/Worker deployment mapping before release. Deploy the email edge function separately after reviewing consent, suppression/unsubscribe and delivery configuration. Public HTML and repository metadata were not identical during the audit.
+Create `.dev.vars` (git-ignored) for local runs:
 
-Existing paid fulfillment needs verification: the current checkout call passes an empty quiz-result ID. A return URL is not payment verification or entitlement. The return page no longer claims a purchase or unlock without proof. Do not market paid fulfillment as tested until Stripe test-mode checkout, signed webhook and entitlement checks pass.
+```
+STRIPE_SECRET_KEY=sk_test_local_mock_not_a_real_key
+STRIPE_API_BASE=http://127.0.0.1:9911
+BREVO_API_KEY=local-mock-key
+BREVO_API_BASE=http://127.0.0.1:9911/v3
+STRIPE_WEBHOOK_SECRET=whsec_local_mock_secret
+DISABLE_RATE_LIMIT=1
+```
 
-Analytics are consent-gated and require an explicitly configured adapter. No purchase event is emitted from a click or return URL. No analytics-provider setup is claimed by this patch.
+`STRIPE_API_BASE`/`BREVO_API_BASE` are honoured only for `localhost`/`127.0.0.1`.
 
-## Sources and limitations
-Guidance references CDC rodent cleanup, trapping and exclusion and UC IPM house-mouse guidance. These organizations have not reviewed or endorsed this app. Product labels, local rules and qualified professional judgment may require different action.
+## Continuous integration
 
-## Rollback
-The pre-change code is preserved at branch `backup/pre-trust-reset-2026-10-01`, commit `d775bab6e834e88574d1b12178d7a65f8422d383`. Revert the reviewed change commit on the deployment branch rather than force-pushing or discarding unrelated work. No database migrations are included.
+The existing `.github/workflows/trust-reset-validation.yml` runs typecheck, build, unit/API tests, the guardrails (`scripts/trust-regression.mjs` is a shim for `scripts/guardrails.mjs`) and the full browser suite (`playwright.trust.config.ts` re-exports `playwright.config.ts`; `scripts/ensure-dev-vars.mjs` creates the mock `.dev.vars`). Stricter `ci.yml` and a manual `deploy.yml` live in `docs/workflows/`; copy them to `.github/workflows/` with a token that has the `workflow` scope.
+
+## Deploy
+
+`npm run deploy` (or the manual **Deploy to production** workflow) builds, checks and runs `wrangler deploy`. The Worker keeps its existing secrets. The zone route is managed in the Cloudflare dashboard. Roll back with `npx wrangler rollback` (previous Worker version) — the previous Pages deployment `mice-solver-fixed` is untouched.
+
+## Sources
+
+CDC: cleaning up after rodents, trapping rodents, sealing entry gaps. UC IPM: house mouse. Linking is not endorsement, and the planner makes no claim of review by those organisations.

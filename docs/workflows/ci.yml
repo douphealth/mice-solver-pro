@@ -1,0 +1,54 @@
+name: CI
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Typecheck app and worker
+        run: npm run typecheck
+      - name: Unit and API tests
+        run: npm test
+      - name: Production build
+        run: npm run build
+      - name: Content and secret guardrails
+        run: npm run guardrails
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+      - name: Local-only test configuration (mock Stripe and Brevo, no real keys)
+        run: |
+          cat > .dev.vars <<'EOF'
+          STRIPE_SECRET_KEY=sk_test_local_mock_not_a_real_key
+          STRIPE_API_BASE=http://127.0.0.1:9911
+          BREVO_API_KEY=local-mock-key
+          BREVO_API_BASE=http://127.0.0.1:9911/v3
+          STRIPE_WEBHOOK_SECRET=whsec_local_mock_secret
+          DISABLE_RATE_LIMIT=1
+          EOF
+      - name: End-to-end and accessibility tests (desktop and mobile)
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-evidence
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
