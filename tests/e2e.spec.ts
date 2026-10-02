@@ -383,7 +383,7 @@ test.describe("Stripe webhook and platform", () => {
 
   test("health reports configuration, not secrets", async ({ request }) => {
     const body = await (await request.get("/api/health")).json();
-    expect(body).toMatchObject({ ok: true, stripe: true, email: true });
+    expect(body).toMatchObject({ ok: true, stripe: true, stripeKeySet: true, email: true });
     expect(JSON.stringify(body)).not.toMatch(/sk_|rk_|whsec|xkeysib/);
   });
 });

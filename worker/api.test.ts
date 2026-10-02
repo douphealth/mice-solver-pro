@@ -74,9 +74,23 @@ describe("health", () => {
     const res = await get("/api/health");
     const body = await res.json() as any;
     expect(res.status).toBe(200);
-    expect(body).toEqual({ ok: true, release: "test", stripe: true, webhook: true, email: true });
+    expect(body).toEqual({ ok: true, release: "test", stripe: true, stripeKeySet: true, webhook: true, email: true });
     expect(JSON.stringify(body)).not.toContain("dummy");
     expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+});
+
+describe("health readiness", () => {
+  it("reports stripe:false when the key is rejected for reading Checkout Sessions, so sales stay paused", async () => {
+    stripeStatusOverride = 403;
+    const body = await (await get("/api/health")).json() as any;
+    expect(body.stripe).toBe(false);
+    expect(body.stripeKeySet).toBe(true);
+  });
+  it("reports stripe:false with no key and never calls Stripe", async () => {
+    const body = await (await get("/api/health", baseEnv({ STRIPE_SECRET_KEY: undefined }))).json() as any;
+    expect(body).toMatchObject({ stripe: false, stripeKeySet: false });
+    expect(calls.stripe).toHaveLength(0);
   });
 });
 

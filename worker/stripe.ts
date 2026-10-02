@@ -28,6 +28,22 @@ export async function stripeGet(env: Env, path: string, query: Array<[string, st
   return { ok: res.ok, status: res.status, data };
 }
 
+/**
+ * True only when the configured key can actually do what purchase verification needs (read Checkout Sessions).
+ * Cached briefly so health checks and page loads don't each call Stripe.
+ */
+export async function stripeReady(env: Env): Promise<boolean> {
+  if (!env.STRIPE_SECRET_KEY) return false;
+  const store = (globalThis as any).caches?.default as Cache | undefined;
+  const probe = new Request("https://probe.invalid/stripe-ready");
+  const hit = store ? await store.match(probe) : undefined;
+  if (hit) return (await hit.text()) === "1";
+  let ok = false;
+  try { ok = (await stripeGet(env, "/v1/checkout/sessions", [["limit", "1"]])).ok; } catch { ok = false; }
+  if (store) await store.put(probe, new Response(ok ? "1" : "0", { headers: { "cache-control": `max-age=${ok ? 60 : 20}` } }));
+  return ok;
+}
+
 export function maskEmail(email: unknown): string | undefined {
   if (typeof email !== "string" || !email.includes("@")) return undefined;
   const [local, domain] = email.split("@");

@@ -1,6 +1,6 @@
 import { PRO_PACK } from "./pro-content";
 import { accessEmail, brevo, firstName, sendMail, welcomeEmail } from "./mail";
-import { SESSION_ID_RE, checkEntitlement, findPaidSessionByEmail, evaluateSession, verifyStripeSignature } from "./stripe";
+import { SESSION_ID_RE, checkEntitlement, findPaidSessionByEmail, evaluateSession, stripeReady, verifyStripeSignature } from "./stripe";
 import type { Env } from "./types";
 
 const APP_ROUTES = new Set([
@@ -164,11 +164,13 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
   return json(env, 200, { ok: true, received: type });
 }
 
-function handleHealth(env: Env): Response {
+async function handleHealth(env: Env): Promise<Response> {
   return json(env, 200, {
     ok: true,
     release: env.RELEASE,
-    stripe: Boolean(env.STRIPE_SECRET_KEY),
+    // true only if the key is set AND Stripe accepts it for reading Checkout Sessions
+    stripe: await stripeReady(env),
+    stripeKeySet: Boolean(env.STRIPE_SECRET_KEY),
     webhook: Boolean(env.STRIPE_WEBHOOK_SECRET),
     email: Boolean(env.BREVO_API_KEY),
   });
