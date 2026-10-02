@@ -29,14 +29,14 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npx tsc --noEmit -p tsconfig.app.json
-          npm test
+          npx vitest run --root "$PWD" --config "$PWD/vitest.config.ts"
           node scripts/trust-regression.mjs
           npm run build
           npx --yes wrangler@4 --version
           npx playwright install --with-deps chromium
           npm run dev -- --host 127.0.0.1 > /tmp/mgg-vite.log 2>&1 &
           for i in $(seq 1 30); do if curl -sf http://127.0.0.1:8080/ > /dev/null; then break; fi; sleep 1; done
-          PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npx playwright test --reporter=line
+          PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npx playwright test --config "$PWD/playwright.config.ts" --reporter=line
       - name: Create ephemeral handshake
         run: node scripts/publication-final.mjs init
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
