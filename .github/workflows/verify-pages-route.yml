@@ -1,0 +1,52 @@
+name: Verify exact Pages route
+on:
+  push:
+    branches: [ops/approved-publish-2026-10-02]
+    paths: [.github/workflows/verify-pages-route.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_READ_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - run: node scripts/verify-pages-route.mjs init
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pages-handshake-${{ github.run_id }}
+          path: pages-route-evidence/handshake.json
+          retention-days: 1
+      - run: node scripts/verify-pages-route.mjs inspect
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pages-diagnosis-${{ github.run_id }}
+          path: pages-route-evidence/diagnosis.json
+          retention-days: 30
+      - run: node scripts/verify-pages-route.mjs promote
+      - name: Browser verification
+        if: success()
+        run: |
+          npx --yes agent-browser install --with-deps
+          npx --yes agent-browser open https://elimination.micegoneguide.com/
+          npx --yes agent-browser snapshot -i > pages-route-evidence/live-snapshot.txt
+          npx --yes agent-browser screenshot pages-route-evidence/desktop.png
+          npx --yes agent-browser set viewport 390 844
+          npx --yes agent-browser screenshot pages-route-evidence/mobile.png
+          npx --yes agent-browser eval 'JSON.stringify({title:document.title,h1:document.querySelector("h1")?.textContent,width:innerWidth,document_width:document.documentElement.scrollWidth})' > pages-route-evidence/mobile-check.json
+          npx --yes agent-browser open https://elimination.micegoneguide.com/quiz
+          npx --yes agent-browser snapshot -i > pages-route-evidence/quiz-snapshot.txt
+          npx --yes agent-browser close
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: pages-result-${{ github.run_id }}
+          path: pages-route-evidence/
+          retention-days: 30
+      - name: Remove secrets
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/mgg-pages-route"
