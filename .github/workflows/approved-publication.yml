@@ -1,0 +1,64 @@
+name: Owner-approved publication
+on:
+  push:
+    branches: [ops/approved-publish-2026-10-02]
+    paths: [.github/workflows/approved-publication.yml]
+permissions:
+  contents: read
+concurrency:
+  group: mgg-approved-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      GH_READ_TOKEN: ${{ github.token }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Validate the existing approved build before loading credentials
+        run: |
+          node --check scripts/approved-release.mjs
+          npm ci --ignore-scripts
+          npx tsc --noEmit -p tsconfig.app.json
+          npm test
+          node scripts/trust-regression.mjs
+          npm run build
+          npx --yes wrangler@4 --version
+      - name: Create ephemeral release handshake
+        run: node scripts/approved-release.mjs init
+      - name: Publish public handshake only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-handshake-${{ github.run_id }}
+          path: release-evidence/handshake.json
+          retention-days: 1
+          if-no-files-found: error
+      - name: Authenticate and preserve encrypted pre-change backup
+        run: node scripts/approved-release.mjs preflight
+      - name: Preserve preflight and encrypted rollback evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-preflight-${{ github.run_id }}
+          path: |
+            release-evidence/preflight.json
+            release-evidence/rollback.encrypted.json
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Publish only explicitly selected and source-guarded targets
+        run: node scripts/approved-release.mjs deploy
+      - name: Preserve publication receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-receipt-${{ github.run_id }}
+          path: release-evidence/receipt.json
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Destroy ephemeral credential state
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/mgg-approved-release"
