@@ -1,0 +1,44 @@
+name: Production planner regression
+on:
+  push:
+    branches: [ops/approved-publish-2026-10-02]
+    paths: [.github/workflows/live-planner-regression.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 0721ca88c9111fd1648aa471667bb49cccd9f193
+          persist-credentials: false
+      - name: Install the tested application toolchain
+        run: |
+          npm ci --ignore-scripts
+          npx playwright install --with-deps chromium
+      - name: Use the already passing regression tests without allowing transactions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/trust-reset.spec.ts')
+          text=p.read_text()
+          before="await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());"
+          after="await page.route('**/*', route => ['GET','HEAD'].includes(route.request().method()) && new URL(route.request().url()).hostname === 'elimination.micegoneguide.com' ? route.continue() : route.abort());"
+          assert text.count(before)==1
+          p.write_text(text.replace(before,after))
+          PY
+          cat > playwright.production.config.ts <<'EOF'
+          import {defineConfig} from '@playwright/test';
+          export default defineConfig({testDir:'./tests',timeout:45000,retries:0,workers:1,reporter:[['list'],['json',{outputFile:'evidence/production-playwright.json'}]],use:{baseURL:'https://elimination.micegoneguide.com',headless:true,screenshot:'only-on-failure',trace:'retain-on-failure'}});
+          EOF
+          npx playwright test --config playwright.production.config.ts
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: production-planner-regression-${{ github.run_id }}
+          path: |
+            evidence/
+            test-results/
+          retention-days: 30
