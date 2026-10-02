@@ -1,0 +1,52 @@
+name: Final live browser verification
+on:
+  push:
+    branches: [ops/approved-publish-2026-10-02]
+    paths: [.github/workflows/final-live-browser-qa.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - run: npx --yes agent-browser install --with-deps
+      - name: Inspect real public pages and generate a free plan without submitting personal data
+        run: |
+          mkdir -p final-qa
+          cat > /tmp/live-qa.mjs <<'EOF'
+          import fs from 'node:fs';import {spawnSync} from 'node:child_process';
+          const APP='https://elimination.micegoneguide.com',OUT='final-qa';
+          const report={checked_at:new Date().toISOString(),checks:[],errors:[],transactions_performed:false};
+          const save=()=>fs.writeFileSync(OUT+'/report.json',JSON.stringify(report,null,2));
+          function browser(...args){const r=spawnSync('npx',['--yes','agent-browser','--session','final-live',...args],{encoding:'utf8',timeout:70000,maxBuffer:1500000});if(r.status!==0)throw new Error(args[0]+': '+(r.stderr||r.stdout).slice(0,400));return r.stdout.trim();}
+          function evaluate(s){let v=browser('eval',s);for(let i=0;i<3&&typeof v==='string';i++){try{v=JSON.parse(v)}catch{break;}}return v;}
+          function metrics(){return evaluate('JSON.stringify({title:document.title,url:location.href,width:innerWidth,document_width:document.documentElement.scrollWidth,h1:Array.from(document.querySelectorAll("h1")).map(n=>n.textContent.replace(/\\s+/g," ").trim()),canonical:document.querySelector("link[rel=canonical]")?.href})');}
+          function record(name,pass,evidence){report.checks.push({name,pass,evidence});save();}
+          async function scenario(name,fn){try{await fn()}catch(e){report.errors.push({name,error:e.message});save();}}
+          await scenario('Homepage',async()=>{
+            browser('set','viewport','1280','900');browser('open',APP+'/');browser('wait','h1');const m=metrics();record('Desktop production planner',m.h1.some(t=>t.replace(/\s/g,'').toLowerCase().includes('mousecontrolplanner')),m);fs.writeFileSync(OUT+'/home-snapshot.txt',browser('snapshot','-i'));browser('screenshot',OUT+'/home-desktop.png');
+            browser('set','viewport','390','844');const mobile=metrics();record('Mobile homepage fits viewport',mobile.document_width<=mobile.width,mobile);browser('screenshot',OUT+'/home-mobile.png');
+          });
+          await scenario('Quiz and PDF',async()=>{
+            browser('open',APP+'/quiz');browser('wait','input[value="none"]');fs.writeFileSync(OUT+'/quiz-start.txt',browser('snapshot','-i'));record('Empty quiz cannot advance',evaluate('Array.from(document.querySelectorAll("button")).find(b=>b.textContent.trim()==="Next")?.disabled')===true,{});
+            const values=['none','kitchen','detached','none','none','secure'];for(let i=0;i<values.length;i++){browser('check','input[value="'+values[i]+'"]');browser('find','role','button','click','--name',i===values.length-1?'View my plan':'Next');fs.writeFileSync(OUT+'/quiz-step-'+i+'.txt',browser('snapshot','-i'));}
+            browser('wait','--url','**/report');browser('wait','button:has-text("Download free plan PDF")');const m=metrics();record('Six-step quiz produces a mobile report',m.h1.some(t=>t.includes('Your Mouse Control Plan'))&&m.document_width<=m.width,m);fs.writeFileSync(OUT+'/report-snapshot.txt',browser('snapshot','-i'));browser('screenshot',OUT+'/report-mobile.png');const text=evaluate('document.body.innerText');fs.writeFileSync(OUT+'/report-text.txt',text);record('No fabricated success metrics in report',!/12,847|94%|Severity Score \(1-10\)|Species Confidence/.test(text),{});
+            const checkout=evaluate('Array.from(document.querySelectorAll("a")).find(a=>a.textContent.includes("View secure checkout"))?.href');record('Existing production Stripe link preserved',checkout==='https://buy.stripe.com/dRm6oH61y1qwbUN3UGejK02',{href:checkout,opened:false});
+            evaluate('(()=>{const original=URL.createObjectURL.bind(URL);URL.createObjectURL=b=>{window.__pdfCheck={size:b.size,type:b.type};b.slice(0,5).text().then(v=>window.__pdfCheck.magic=v);return original(b)};return true;})()');browser('find','role','button','click','--name','Download free plan PDF');let pdf;for(let i=0;i<12;i++){pdf=evaluate('JSON.stringify(window.__pdfCheck||null)');if(pdf?.magic==='%PDF-')break;await new Promise(r=>setTimeout(r,700));}record('Free PDF generated without email or account',pdf?.magic==='%PDF-'&&pdf.size>1000,pdf);
+          });
+          await scenario('Observation tool',async()=>{
+            browser('open',APP+'/tools/calculator');browser('wait','#observation');browser('snapshot','-i');browser('select','#observation','damaged_wiring');const text=evaluate('document.body.innerText'),m=metrics();record('Wiring observation gives qualified-help guidance',/electric|wiring/i.test(text)&&/professional|qualified/i.test(text)&&m.document_width<=m.width,m);browser('screenshot',OUT+'/observation-mobile.png');
+          });
+          for(const [slug,title]of [['rats-vs-mice-whats-the-difference','Rats vs Mice: How to Tell the Difference'],['mouse-removal','Mouse Removal: Find Your Next Step']])await scenario(slug,async()=>{
+            const url='https://micegoneguide.com/'+slug+'/';browser('open',url+'?release_qa='+process.env.GITHUB_RUN_ID);browser('wait','h1');const snap=browser('snapshot','-i');if(snap.includes('Reject All'))browser('find','role','button','click','--name','Reject All');const m=metrics();record('WordPress final heading: '+slug,m.h1.length===1&&m.h1[0]===title&&m.document_width<=m.width&&m.canonical===url,m);browser('screenshot',OUT+'/'+slug+'-mobile.png');
+          });
+          try{browser('close')}catch{}report.all_passed=report.errors.length===0&&report.checks.length>=10&&report.checks.every(c=>c.pass);save();console.log(JSON.stringify(report,null,2));if(!report.all_passed)process.exitCode=1;
+          EOF
+          node /tmp/live-qa.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: final-live-qa-${{ github.run_id }}
+          path: final-qa/
+          retention-days: 30
