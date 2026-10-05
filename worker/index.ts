@@ -27,6 +27,103 @@ const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+type PublicSeo = {
+  title: string;
+  description: string;
+  h1: string;
+  intro: string;
+  links: Array<{ href: string; label: string }>;
+};
+
+const PUBLIC_SEO: Record<string, PublicSeo> = {
+  "/": {
+    title: "Mouse Control Planner: Free Step-by-Step Plan | MiceGoneGuide",
+    description: "Build a free, source-backed mouse control plan in two minutes: what to do today, this week and ongoing, based on CDC and UC IPM guidance.",
+    h1: "A clear, source-backed plan for your mouse problem",
+    intro: "Answer seven quick questions about the signs, rooms and household conditions you observed. The planner returns a practical sequence for inspection, trapping, safe cleanup, sealing and follow-up without claiming to diagnose an infestation.",
+    links: [
+      { href: "/quiz", label: "Build your free mouse control plan" },
+      { href: "/tools/entry-points", label: "Inspect mouse entry gaps" },
+      { href: "/tools/trap-placement", label: "Plan mouse trap placement" },
+      { href: "/tools/cleanup-guide", label: "Follow the safe cleanup guide" },
+    ],
+  },
+  "/quiz": {
+    title: "Build Your Free Mouse Control Plan | MiceGoneGuide",
+    description: "Answer seven quick questions about what you observed and get a source-backed mouse-control action plan. No email or signup required.",
+    h1: "Build your free mouse control plan",
+    intro: "Use observed evidence, room location, household constraints and previous control attempts to organize the safest next steps. The planner uses fixed, reviewable rules rather than a black-box diagnosis or mouse-count estimate.",
+    links: [
+      { href: "/tools/calculator", label: "Check what mouse signs can mean" },
+      { href: "/tools/entry-points", label: "Inspect likely entry points" },
+      { href: "/tools/trap-placement", label: "Review trap placement guidance" },
+      { href: "/tools/cleanup-guide", label: "Review safe cleanup steps" },
+    ],
+  },
+  "/tools/calculator": {
+    title: "Mouse Signs: What They Mean and What to Do Next | MiceGoneGuide",
+    description: "Review droppings, noises, odors and gnaw marks, what each sign can and cannot establish, and the safest next step using CDC and UC IPM guidance.",
+    h1: "Mouse signs: what they can tell you and what to do next",
+    intro: "A single sound, odor or dropping does not establish species, population size or infestation severity. Use this evidence guide to separate physical signs from uncertain clues and choose a proportionate next action.",
+    links: [
+      { href: "/quiz", label: "Build a complete action plan" },
+      { href: "/tools/entry-points", label: "Inspect possible entry gaps" },
+      { href: "/tools/trap-placement", label: "Choose safer trap locations" },
+      { href: "/tools/cleanup-guide", label: "Clean droppings safely" },
+    ],
+  },
+  "/tools/entry-points": {
+    title: "Mouse Entry-Gap Inspection Checklist | MiceGoneGuide",
+    description: "Inspect common mouse entry points inside and outside your home and match likely gaps to durable exclusion materials and safer next steps.",
+    h1: "Mouse entry-gap inspection checklist",
+    intro: "Inspect door bottoms, utility penetrations, garage corners, foundations, vents and other realistic access points. Preserve drainage, ventilation and utility safety while prioritizing durable, chew-resistant repairs.",
+    links: [
+      { href: "/quiz", label: "Build your mouse-control plan" },
+      { href: "/tools/calculator", label: "Review the evidence first" },
+      { href: "/tools/trap-placement", label: "Plan traps on active routes" },
+      { href: "/tools/cleanup-guide", label: "Handle contamination safely" },
+    ],
+  },
+  "/tools/trap-placement": {
+    title: "Where to Place Mouse Traps: Visual Guide | MiceGoneGuide",
+    description: "Learn where to place, bait and space mouse traps using wall-edge travel patterns and source-backed CDC and UC IPM guidance.",
+    h1: "Where to place mouse traps",
+    intro: "Trap placement works best when it follows observed travel routes instead of open-floor guesses. Position traps along active wall edges, protect children and pets, and keep monitoring until catches and fresh signs stop.",
+    links: [
+      { href: "/quiz", label: "Build a complete control plan" },
+      { href: "/tools/calculator", label: "Confirm the evidence you observed" },
+      { href: "/tools/entry-points", label: "Find and prioritize entry gaps" },
+      { href: "/tools/cleanup-guide", label: "Clean affected areas safely" },
+    ],
+  },
+  "/tools/cleanup-guide": {
+    title: "How to Clean Up After Mice Safely | MiceGoneGuide",
+    description: "Follow a step-by-step mouse-dropping, urine, nest and trap cleanup checklist based on CDC guidance, without dry sweeping or vacuuming.",
+    h1: "How to clean up after mice safely",
+    intro: "Keep people and pets away from contaminated areas, ventilate enclosed spaces when appropriate, wet contaminated material before wiping, and avoid dry sweeping or vacuuming rodent waste. Escalate inaccessible or extensive contamination to qualified help.",
+    links: [
+      { href: "/quiz", label: "Build your follow-up action plan" },
+      { href: "/tools/calculator", label: "Review the signs you found" },
+      { href: "/tools/entry-points", label: "Inspect routes before sealing" },
+      { href: "/tools/trap-placement", label: "Plan safer trap placement" },
+    ],
+  },
+  "/privacy": {
+    title: "Privacy | MiceGoneGuide",
+    description: "How the MiceGoneGuide Mouse Control Planner handles quiz answers, optional email check-ins and purchase verification.",
+    h1: "Privacy",
+    intro: "Quiz answers are designed to stay in your browser. Optional email check-ins and Pro purchase verification use only the information needed for those services.",
+    links: [{ href: "/", label: "Return to the mouse control planner" }],
+  },
+  "/terms": {
+    title: "Terms and Purchase Information | MiceGoneGuide",
+    description: "Terms of use and purchase information for the MiceGoneGuide Mouse Control Planner and optional Pro Masterplan.",
+    h1: "Terms and purchase information",
+    intro: "Review the educational scope of the planner, limits of the guidance and the purchase terms that apply to the optional Pro Masterplan.",
+    links: [{ href: "/", label: "Return to the mouse control planner" }],
+  },
+};
+
 // ------------------------------------------------------------------ helpers
 
 function baseHeaders(env: Env): Record<string, string> {
@@ -198,6 +295,34 @@ function isAssetPath(pathname: string): boolean {
   return last.includes(".");
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] || ch));
+}
+
+function replaceHeadValue(html: string, pattern: RegExp, replacement: string): string {
+  return pattern.test(html) ? html.replace(pattern, replacement) : html;
+}
+
+function serverRenderPublicRoute(html: string, route: string, origin: string): string {
+  const seo = PUBLIC_SEO[route];
+  if (!seo) return html;
+  const canonical = `${origin}${route === "/" ? "/" : route}`;
+  const nav = seo.links.map(link => `<li><a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a></li>`).join("");
+  const fallback = `<main data-server-seo="true"><h1>${escapeHtml(seo.h1)}</h1><p>${escapeHtml(seo.intro)}</p><nav aria-label="Related mouse control tools"><ul>${nav}</ul></nav><p><a href="https://micegoneguide.com/">Read the MiceGoneGuide mouse-control library</a></p></main>`;
+
+  html = replaceHeadValue(html, /<title>[^<]*<\/title>/i, `<title>${escapeHtml(seo.title)}</title>`);
+  html = replaceHeadValue(html, /<meta name="description" content="[^"]*"\s*\/?\s*>/i, `<meta name="description" content="${escapeHtml(seo.description)}" />`);
+  html = replaceHeadValue(html, /<meta name="robots" content="[^"]*"\s*\/?\s*>/i, '<meta name="robots" content="index, follow" />');
+  html = replaceHeadValue(html, /<link rel="canonical" href="[^"]*"\s*\/?\s*>/i, `<link rel="canonical" href="${canonical}" />`);
+  html = replaceHeadValue(html, /<meta property="og:url" content="[^"]*"\s*\/?\s*>/i, `<meta property="og:url" content="${canonical}" />`);
+  html = replaceHeadValue(html, /<meta property="og:title" content="[^"]*"\s*\/?\s*>/i, `<meta property="og:title" content="${escapeHtml(seo.title)}" />`);
+  html = replaceHeadValue(html, /<meta property="og:description" content="[^"]*"\s*\/?\s*>/i, `<meta property="og:description" content="${escapeHtml(seo.description)}" />`);
+  html = replaceHeadValue(html, /<meta name="twitter:title" content="[^"]*"\s*\/?\s*>/i, `<meta name="twitter:title" content="${escapeHtml(seo.title)}" />`);
+  html = replaceHeadValue(html, /<meta name="twitter:description" content="[^"]*"\s*\/?\s*>/i, `<meta name="twitter:description" content="${escapeHtml(seo.description)}" />`);
+  html = html.replace('<div id="root"></div>', `<div id="root">${fallback}</div>`);
+  return html;
+}
+
 function decorate(env: Env, res: Response, pathname: string, isHtml: boolean, status?: number): Response {
   const headers = new Headers(res.headers);
   for (const [k, v] of Object.entries(baseHeaders(env))) headers.set(k, v);
@@ -234,6 +359,10 @@ async function serveStatic(request: Request, env: Env, url: URL): Promise<Respon
   let res = await env.ASSETS.fetch(request);
   if (res.status === 404 && known) res = await env.ASSETS.fetch(new Request(new URL("/", url), { headers: request.headers }));
   const isHtml = (res.headers.get("content-type") || "").includes("text/html");
+  if (isHtml && PUBLIC_SEO[route] && request.method !== "HEAD") {
+    const body = serverRenderPublicRoute(await res.text(), route, env.PUBLIC_ORIGIN);
+    res = new Response(body, { status: res.status, statusText: res.statusText, headers: res.headers });
+  }
   return decorate(env, res, url.pathname, isHtml);
 }
 
