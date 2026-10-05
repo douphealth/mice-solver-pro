@@ -61,6 +61,28 @@ test("a made-up purchase reference never unlocks Pro", async ({ page }) => {
   expect(await r.text()).not.toContain("milestones");
 });
 
+test("public SEO routes are crawlable without JavaScript", async ({ request }) => {
+  const routes = [
+    ["/", "A clear, source-backed plan for your mouse problem"],
+    ["/quiz", "Build your free mouse control plan"],
+    ["/tools/calculator", "Mouse signs: what they can tell you and what to do next"],
+    ["/tools/entry-points", "Mouse entry-gap inspection checklist"],
+    ["/tools/trap-placement", "Where to place mouse traps"],
+    ["/tools/cleanup-guide", "How to clean up after mice safely"],
+  ] as const;
+
+  for (const [path, h1] of routes) {
+    const response = await request.get(path);
+    expect(response.status(), path).toBe(200);
+    const html = await response.text();
+    const canonical = `https://elimination.micegoneguide.com${path === "/" ? "/" : path}`;
+    expect(html, path).toContain(`<link rel="canonical" href="${canonical}" />`);
+    expect(html, path).toContain(`<h1>${h1}</h1>`);
+    expect(html, path).toContain('data-server-seo="true"');
+    expect(html, path).toContain("Related mouse control tools");
+  }
+});
+
 test("platform: headers, legacy routes, input validation (no side effects)", async ({ request }) => {
   const home = await request.get("/");
   expect(home.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
