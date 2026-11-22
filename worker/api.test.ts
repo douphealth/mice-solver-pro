@@ -216,6 +216,62 @@ describe("/api/stripe-webhook", () => {
   });
 });
 
+describe("/api/access-email", () => {
+  const cache = new Map<string, Response>();
+  beforeEach(() => {
+    cache.clear();
+    vi.stubGlobal("caches", { default: { match: async (r: Request) => cache.get(r.url)?.clone(), put: async (r: Request, res: Response) => { cache.set(r.url, res); } } });
+  });
+  const env = () => baseEnv({ DISABLE_RATE_LIMIT: "1" });
+  const mails = () => calls.brevo.filter(c => c.path === "/smtp/email");
+
+  it("emails the access link for a verified purchase to the email on the Stripe session, once", async () => {
+    const res = await post("/api/access-email", { session_id: SID }, env());
+    const body = await res.json() as any;
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, sent: true, outcome: "sent" });
+    expect(body.email).toMatch(/^j\*+@example\.com$/);
+    expect(mails()).toHaveLength(1);
+    expect(mails()[0].body.to[0].email).toBe("jordan@example.com");
+    expect(mails()[0].body.htmlContent).toContain(`/payment-success?session_id=${SID}`);
+
+    const again = await (await post("/api/access-email", { session_id: SID }, env())).json() as any;
+    expect(again).toMatchObject({ sent: true, outcome: "already" });
+    expect(mails()).toHaveLength(1);
+  });
+  it("does not email for unpaid, refunded or other-product sessions", async () => {
+    for (const over of [{ payment_status: "unpaid" }, { payment_link: "plink_other" }, { payment_intent: { latest_charge: { refunded: true, amount: 1, amount_refunded: 1 } } }]) {
+      sessions[SID] = paidSession(over);
+      expect((await post("/api/access-email", { session_id: SID }, env())).status).toBe(402);
+    }
+    expect(mails()).toHaveLength(0);
+  });
+  it("validates input, origin and method", async () => {
+    expect((await post("/api/access-email", { session_id: "nope" }, env())).status).toBe(400);
+    expect((await post("/api/access-email", { session_id: SID }, env(), { origin: "https://evil.example" })).status).toBe(403);
+    expect((await get("/api/access-email", env())).status).toBe(405);
+    expect(calls.stripe).toHaveLength(0);
+  });
+  it("reports a failed send honestly and lets a retry send it", async () => {
+    brevoFail = true;
+    expect(await (await post("/api/access-email", { session_id: SID }, env())).json()).toMatchObject({ sent: false, outcome: "failed" });
+    brevoFail = false;
+    expect(await (await post("/api/access-email", { session_id: SID }, env())).json()).toMatchObject({ sent: true, outcome: "sent" });
+  });
+  it("shares the once-per-purchase marker with the webhook", async () => {
+    await post("/api/access-email", { session_id: SID }, env());
+    const raw = JSON.stringify({ id: "evt_9", type: "checkout.session.completed", data: { object: paidSession() } });
+    const t = Math.floor(Date.now() / 1000);
+    const res = await worker.fetch(new Request(ORIGIN + "/api/stripe-webhook", { method: "POST", headers: { "stripe-signature": `t=${t},v1=${await hmacSha256Hex("whsec_dummy", `${t}.${raw}`)}` }, body: raw }), env());
+    expect(res.status).toBe(200);
+    expect(mails()).toHaveLength(1);
+  });
+  it("returns 503 when Stripe is unreachable", async () => {
+    stripeStatusOverride = 500;
+    expect((await post("/api/access-email", { session_id: SID }, env())).status).toBe(503);
+  });
+});
+
 describe("/api/lead", () => {
   const valid = { email: "Pat@Example.com ", name: "Pat Smith", consent: true };
   it("requires consent and a valid email, and ignores honeypot submissions", async () => {

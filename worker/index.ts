@@ -56,6 +56,36 @@ async function allow(env: Env, key: string, limit: number, windowSec: number): P
   return true;
 }
 
+/**
+ * Best-effort "send the access email once per purchase" marker, shared by the success page and the webhook so a buyer
+ * normally gets one email even when both fire. Colo-local, so a rare duplicate is possible; a missed send is not,
+ * because the marker is written only after the provider accepts the email.
+ */
+const accessMarker = (sessionId: string) => new Request(`https://access-mail.invalid/${encodeURIComponent(sessionId)}`);
+async function accessAlreadySent(sessionId: string): Promise<boolean> {
+  const store = (globalThis as any).caches?.default as Cache | undefined;
+  return store ? Boolean(await store.match(accessMarker(sessionId))) : false;
+}
+async function markAccessSent(sessionId: string): Promise<void> {
+  const store = (globalThis as any).caches?.default as Cache | undefined;
+  if (store) await store.put(accessMarker(sessionId), new Response("1", { headers: { "cache-control": "max-age=2592000" } }));
+}
+
+/** Email the access link for a verified purchase unless it was already sent. Never throws. */
+async function sendAccessOnce(env: Env, sessionId: string, toEmail: unknown): Promise<"sent" | "already" | "failed" | "no_email"> {
+  if (typeof toEmail !== "string" || !EMAIL_RE.test(toEmail)) return "no_email";
+  if (!env.BREVO_API_KEY) return "failed";
+  try {
+    if (await accessAlreadySent(sessionId)) return "already";
+    const res = await sendMail(env, { email: toEmail }, accessEmail(env, sessionId, { restore: false }), ["micegoneguide", "pro-access"]);
+    if (!res.ok) return "failed";
+    await markAccessSent(sessionId);
+    return "sent";
+  } catch {
+    return "failed";
+  }
+}
+
 async function readJson(request: Request, maxBytes = 16384): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; status: number; message: string }> {
   if (Number(request.headers.get("content-length") || 0) > maxBytes) return { ok: false, status: 413, message: "Request too large." };
   try {
@@ -140,6 +170,25 @@ async function handleRestore(request: Request, env: Env, url: URL): Promise<Resp
   return json(env, 200, generic);
 }
 
+/**
+ * Called by /payment-success after Stripe confirms the purchase, so the buyer always gets an access link by email,
+ * with or without the webhook. Sends only to the email on the Stripe purchase, at most once per purchase.
+ */
+async function handleAccessEmail(request: Request, env: Env, url: URL): Promise<Response> {
+  if (request.method !== "POST") return json(env, 405, { ok: false, message: "Use POST." });
+  if (!originAllowed(request, env, url)) return json(env, 403, { ok: false, message: "Origin not allowed." });
+  const body = await readJson(request, 1024);
+  if (!body.ok) return json(env, body.status, { ok: false, message: body.message });
+  const sessionId = String(body.value.session_id || "");
+  if (!SESSION_ID_RE.test(sessionId)) return json(env, 400, { ok: false, sent: false, message: "Invalid purchase reference." });
+  if (!(await allow(env, `access:${clientIp(request)}`, 10, 3600))) return json(env, 429, { ok: false, sent: false, message: "Too many requests." });
+  const { entitlement, session } = await checkEntitlement(env, sessionId);
+  if (entitlement.reason === "unavailable") return json(env, 503, { ok: false, sent: false, message: "We couldn't reach the payment service." });
+  if (!entitlement.active) return json(env, 402, { ok: false, sent: false, entitlement });
+  const outcome = await sendAccessOnce(env, sessionId, session?.customer_details?.email || session?.customer_email);
+  return json(env, 200, { ok: outcome === "sent" || outcome === "already", sent: outcome === "sent" || outcome === "already", outcome, email: entitlement.email });
+}
+
 async function handleWebhook(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json(env, 405, { ok: false });
   if (!env.STRIPE_WEBHOOK_SECRET) return json(env, 503, { ok: false, message: "Webhook is not configured." });
@@ -154,11 +203,10 @@ async function handleWebhook(request: Request, env: Env): Promise<Response> {
   if ((type === "checkout.session.completed" || type === "checkout.session.async_payment_succeeded") && session) {
     const verdict = evaluateSession(session, env);
     const toEmail = session.customer_details?.email || session.customer_email;
-    if (verdict.active && typeof toEmail === "string" && EMAIL_RE.test(toEmail) && SESSION_ID_RE.test(String(session.id || ""))) {
-      // Stripe retries on any non-2xx, so send at most once per event and never fail the webhook because of email.
-      if (env.BREVO_API_KEY && (await allow(env, `wh:${event.id}`, 1, 86400))) {
-        try { await sendMail(env, { email: toEmail }, accessEmail(env, session.id, { restore: false }), ["micegoneguide", "pro-access"]); } catch { /* logged by Stripe delivery view */ }
-      }
+    if (verdict.active && SESSION_ID_RE.test(String(session.id || ""))) {
+      // Stripe retries on any non-2xx, so never fail the webhook because of email; the shared marker prevents a second
+      // email when the success page already sent one.
+      await sendAccessOnce(env, String(session.id), toEmail);
     }
   }
   return json(env, 200, { ok: true, received: type });
@@ -186,6 +234,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   if (path === "/api/entitlement") return handleEntitlement(request, env, url, false);
   if (path === "/api/pro-pack") return handleEntitlement(request, env, url, true);
   if (path === "/api/restore") return handleRestore(request, env, url);
+  if (path === "/api/access-email") return handleAccessEmail(request, env, url);
   if (path === "/api/stripe-webhook") return handleWebhook(request, env);
   if (path === "/api/health") return handleHealth(env);
   return json(env, 404, { ok: false, message: "Unknown API route." });

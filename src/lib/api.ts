@@ -49,6 +49,16 @@ export async function requestRestore(email: string): Promise<{ ok: boolean; mess
   }
 }
 
+/** Ask the server to email the access link for a verified purchase (to the email on the Stripe purchase, once). */
+export async function requestAccessEmail(sessionId: string): Promise<{ sent: boolean; email?: string }> {
+  try {
+    const { status, body } = await call("/api/access-email", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ session_id: sessionId }) });
+    return { sent: status === 200 && body?.sent === true, email: typeof body?.email === "string" ? body.email : undefined };
+  } catch {
+    return { sent: false };
+  }
+}
+
 /** Whether the server can currently verify and fulfil Pro purchases. Fails open on network errors; only an explicit "stripe: false" blocks the sale. */
 export async function checkoutAvailable(): Promise<boolean> {
   try {

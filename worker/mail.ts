@@ -55,7 +55,8 @@ export function welcomeEmail(env: Env, name: string) {
 
 export function accessEmail(env: Env, sessionId: string, opts: { restore: boolean }) {
   const origin = env.PUBLIC_ORIGIN;
-  const link = `${origin}/payment-success?session_id=${encodeURIComponent(sessionId)}`;
+  // src=email tells the success page this buyer already has the link, so it doesn't send another email.
+  const link = `${origin}/payment-success?session_id=${encodeURIComponent(sessionId)}&src=email`;
   const heading = opts.restore ? "Your Pro Masterplan access link" : "Thank you. Your Pro Masterplan is ready";
   const inner =
     `<p>${opts.restore ? "You asked us to resend your access link." : "Your purchase went through."} Open the link below to unlock your Pro workspace on any device.</p>` +

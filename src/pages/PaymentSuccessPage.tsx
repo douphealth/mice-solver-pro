@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2, Clock, Loader2, MailQuestion, RotateCw, XCircle } from "lucide-react";
 import PageShell from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
-import { verifyPurchase } from "@/lib/api";
+import { requestAccessEmail, verifyPurchase } from "@/lib/api";
 import { KEYS, writeJSON } from "@/lib/storage";
 import { trackEvent } from "@/lib/analytics";
 import { CONTACT_EMAIL } from "@/lib/sources";
@@ -21,7 +21,10 @@ export default function PaymentSuccessPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const sessionId = params.get("session_id") ?? "";
+  const fromEmail = params.get("src") === "email";
   const [view, setView] = useState<View>(() => (SESSION_RE.test(sessionId) ? { kind: "verifying" } : { kind: "missing" }));
+  /** "sending" until the server answers; then whether the access link went out (or had already been sent). */
+  const [mail, setMail] = useState<"sending" | "sent" | "failed">("sending");
 
   const run = useCallback(async () => {
     if (!SESSION_RE.test(sessionId)) { setView({ kind: "missing" }); return; }
@@ -31,6 +34,13 @@ export default function PaymentSuccessPage() {
       writeJSON(KEYS.pro, { sessionId, savedAt: new Date().toISOString() });
       trackEvent("pro_verified");
       setView({ kind: "active", entitlement: res.data.entitlement });
+      const sentKey = `mgg.accessMailed.${sessionId}`;
+      let already = false;
+      try { already = window.localStorage.getItem(sentKey) === "1"; } catch { /* storage blocked */ }
+      if (already || fromEmail) { setMail("sent"); return; }
+      const out = await requestAccessEmail(sessionId);
+      if (out.sent) { try { window.localStorage.setItem(sentKey, "1"); } catch { /* storage blocked */ } }
+      setMail(out.sent ? "sent" : "failed");
       return;
     }
     const reason = res.ok ? res.data.entitlement.reason : res.data?.entitlement?.reason;
@@ -41,14 +51,15 @@ export default function PaymentSuccessPage() {
       writeJSON(KEYS.pro, { sessionId, savedAt: new Date().toISOString() });
       setView({ kind: "error", message: res.ok ? "We couldn't verify this purchase right now." : res.message });
     }
-  }, [sessionId]);
+  }, [sessionId, fromEmail]);
 
   useEffect(() => { void run(); }, [run]);
   useEffect(() => {
-    if (view.kind !== "active") return;
-    const t = window.setTimeout(() => navigate("/pro", { replace: true }), 2500);
+    // Wait for the email outcome so the buyer sees whether their access link was sent before the workspace opens.
+    if (view.kind !== "active" || mail === "sending") return;
+    const t = window.setTimeout(() => navigate("/pro", { replace: true }), mail === "sent" ? 3500 : 8000);
     return () => window.clearTimeout(t);
-  }, [view, navigate]);
+  }, [view, mail, navigate]);
 
   return (
     <PageShell>
@@ -63,14 +74,19 @@ export default function PaymentSuccessPage() {
           {view.kind === "active" && (<>
             <CheckCircle2 className="mx-auto h-14 w-14 text-success" aria-hidden="true" />
             <h1 className="mt-5 text-3xl font-bold">Payment confirmed. Welcome to Pro</h1>
-            <p className="mt-3 text-muted-foreground">Your {view.entitlement.email ? `purchase for ${view.entitlement.email} is` : "purchase is"} verified. We're opening your workspace now. An access link has also been emailed so you can restore it on any device.</p>
+            <p className="mt-3 text-muted-foreground">Your {view.entitlement.email ? `purchase for ${view.entitlement.email} is` : "purchase is"} verified. We're opening your workspace now.</p>
+            <p className="mt-2 text-sm text-muted-foreground" data-testid="access-mail-status">
+              {mail === "sending" && "Sending your access link by email..."}
+              {mail === "sent" && `We've emailed an access link${view.entitlement.email ? ` to ${view.entitlement.email}` : ""} so you can open Pro on any device. Check your spam folder if it's not there in a few minutes.`}
+              {mail === "failed" && <>We couldn't send the access link email just now. Your workspace still opens on this device, and you can get the link any time from <Link to="/restore" className="font-semibold text-primary underline">Restore my purchase</Link> with your checkout email.</>}
+            </p>
             <Button asChild variant="premium" size="lg" className="mt-6"><Link to="/pro" replace>Open my Pro workspace</Link></Button>
           </>)}
 
           {view.kind === "pending" && (<>
             <Clock className="mx-auto h-14 w-14 text-[hsl(33_90%_42%)]" aria-hidden="true" />
             <h1 className="mt-5 text-3xl font-bold">Your payment is still processing</h1>
-            <p className="mt-3 text-muted-foreground">Stripe hasn't marked this payment as complete yet. Some payment methods take a little while. We'll email your access link when it clears, or you can check again now.</p>
+            <p className="mt-3 text-muted-foreground">Stripe hasn't marked this payment as complete yet. Some payment methods take a little while. Check again in a minute: once it clears, your workspace opens here and the access link is emailed to you. If you close this page, use Restore my purchase later with your checkout email.</p>
             <Button variant="default" size="lg" className="mt-6" onClick={() => void run()}><RotateCw className="h-4 w-4" aria-hidden="true" />Check again</Button>
           </>)}
 

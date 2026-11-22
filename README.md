@@ -19,6 +19,7 @@ One Worker (`micegoneguide-elimination-selfhosted-proxy`, route `elimination.mic
 |---|---|
 | `GET /api/entitlement?session_id=` | Is this Checkout Session a paid, unrefunded purchase of the Pro product? |
 | `GET /api/pro-pack?session_id=` | Returns the Pro content **only** if the above is true (`402` otherwise). The Pro content lives in `worker/pro-content.ts` and is not in the public JS bundle. |
+| `POST /api/access-email` | Called by `/payment-success` once Stripe confirms the purchase: emails the access link to the address on the Stripe session, once per purchase (shared marker with the webhook). Works without the webhook. |
 | `POST /api/restore` | Emails an access link to the address used at checkout (same response whether or not a purchase exists). |
 | `POST /api/lead` | Optional email check-ins (Brevo list + welcome email). Consent required, honeypot, rate limited. |
 | `POST /api/stripe-webhook` | Signed Stripe webhook; emails the access link after a paid checkout. Optional hardening: access never depends on it. |
@@ -29,7 +30,7 @@ One Worker (`micegoneguide-elimination-selfhosted-proxy`, route `elimination.mic
 1. `/pro` links to the live Stripe Payment Link (`plink_1UCvLgGCqwm95OGXtz60RBjB`, $9.99, success URL `/payment-success?session_id={CHECKOUT_SESSION_ID}`).
 2. Stripe returns the buyer to `/payment-success`. The page calls `/api/entitlement`; the Worker retrieves the session from Stripe and checks: product/payment link, `mode=payment`, `status=complete`, `payment_status=paid`, and (when the key allows) that the charge is not refunded or disputed.
 3. Only then is the session id stored in the browser and `/pro` opens. Every later visit re-verifies, so a refund ends access. If the server can't be reached, a saved copy opens offline with a visible notice.
-4. The access link is emailed (webhook, if configured) and can be re-sent from `/restore`.
+4. The success page then asks the Worker to email the access link (`/api/access-email`); the webhook, if configured, does the same for buyers who close the tab before returning. Either way the buyer gets one email, and the link can be re-sent from `/restore`.
 
 A return URL, a click or a stored id **never** grants access by itself.
 

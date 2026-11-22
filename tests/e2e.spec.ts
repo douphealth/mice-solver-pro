@@ -221,13 +221,22 @@ test.describe("Pro purchase and gating", () => {
     const errors = watchErrors(page);
     await resetMock();
     await completeQuiz(page);
-    await page.goto(`/payment-success?session_id=${PAID}`);
+    // A fresh paid purchase id, since access emails are sent once per purchase.
+    const sid = `cs_test_PAIDNEW${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+    await page.goto(`/payment-success?session_id=${sid}`);
     await expect(page.getByRole("heading", { name: /Payment confirmed/ })).toBeVisible();
+    await expect(page.getByTestId("access-mail-status")).toContainText("We've emailed an access link");
     await page.waitForURL("**/pro");
     await expect(page.getByRole("heading", { name: "Your Pro workspace" })).toBeVisible();
     await expect(page.getByText(/Purchase verified/)).toBeVisible();
     await noOverflow(page);
-    expect((await mockCalls()).stripe.some(c => c.path === `/v1/checkout/sessions/${PAID}`)).toBe(true);
+    const after = await mockCalls();
+    expect(after.stripe.some(c => c.path === `/v1/checkout/sessions/${sid}`)).toBe(true);
+    // the buyer gets the access link by email even without the Stripe webhook
+    const access = after.brevo.filter(c => c.path === "/smtp/email");
+    expect(access).toHaveLength(1);
+    expect(access[0].body.to[0].email).toBe("buyer@example.com");
+    expect(access[0].body.htmlContent).toContain(`/payment-success?session_id=${sid}&amp;src=email`);
 
     // schedule: personalised, dated, persistent
     await page.getByRole("tab", { name: "30-day plan", exact: true }).click();
@@ -357,12 +366,19 @@ test.describe("Stripe webhook and platform", () => {
     await resetMock();
     const bad = await request.post("/api/stripe-webhook", { data: JSON.stringify(completed), headers: { "stripe-signature": "t=1,v1=bad" } });
     expect(bad.status()).toBe(400);
-    const { raw, header } = event({ ...completed, id: `evt_e2e_${Date.now()}` });
+    // A purchase id of its own: access emails are sent once per purchase, and other tests already used PAID.
+    const sid = `cs_test_PAIDWH${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+    const { raw, header } = event({ ...completed, id: `evt_e2e_${Date.now()}`, data: { object: { ...completed.data.object, id: sid } } });
     const ok = await request.post("/api/stripe-webhook", { data: raw, headers: { "stripe-signature": header } });
     expect(ok.status()).toBe(200);
-    const mail = (await mockCalls()).brevo.find(c => c.path === "/smtp/email");
-    expect(mail?.body.to[0].email).toBe("buyer@example.com");
-    expect(mail?.body.htmlContent).toContain(`session_id=${PAID}`);
+    const mails = (await mockCalls()).brevo.filter(c => c.path === "/smtp/email");
+    expect(mails).toHaveLength(1);
+    expect(mails[0].body.to[0].email).toBe("buyer@example.com");
+    expect(mails[0].body.htmlContent).toContain(`session_id=${sid}`);
+    // Stripe redelivers events; the buyer still gets only one email.
+    const retry = event({ ...completed, id: `evt_e2e_retry_${Date.now()}`, data: { object: { ...completed.data.object, id: sid } } });
+    expect((await request.post("/api/stripe-webhook", { data: retry.raw, headers: { "stripe-signature": retry.header } })).status()).toBe(200);
+    expect((await mockCalls()).brevo.filter(c => c.path === "/smtp/email")).toHaveLength(1);
   });
 
   test("security headers and search-engine hygiene", async ({ request }) => {

@@ -17,7 +17,7 @@
   "observability": { "enabled": true },
   "vars": {
     "PUBLIC_ORIGIN": "https://elimination.micegoneguide.com",
-    "RELEASE": "pro-workspace-2026-10-02",
+    "RELEASE": "stripe-access-mail-2026-11-22",
     // Live Stripe Payment Link and product for the Pro Masterplan (checked against Stripe on 2026-10-02).
     "PAYMENT_LINK_ID": "plink_1UCvLgGCqwm95OGXtz60RBjB",
     "PRODUCT_ID": "prod_UGIuz2PLtNFw3p",

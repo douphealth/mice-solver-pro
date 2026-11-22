@@ -64,7 +64,10 @@ test("a made-up purchase reference never unlocks Pro", async ({ page }) => {
 test("platform: headers, legacy routes, input validation (no side effects)", async ({ request }) => {
   const home = await request.get("/");
   expect(home.headers()["content-security-policy"]).toContain("frame-ancestors 'none'");
-  expect(home.headers()["x-mgg-release"]).toBe("pro-workspace-2026-10-02");
+  expect(home.headers()["x-mgg-release"]).toBe("stripe-access-mail-2026-11-22");
+  // access-email refuses ids that aren't a paid purchase (no email is sent)
+  expect((await request.post("/api/access-email", { data: { session_id: "cs_live_a1B2c3D4e5F6g7H8i9J0" }, headers: { origin: "https://elimination.micegoneguide.com" } })).status()).toBe(402);
+  expect((await request.post("/api/access-email", { data: { session_id: "nope" }, headers: { origin: "https://elimination.micegoneguide.com" } })).status()).toBe(400);
   for (const p of ["/plan", "/pro", "/payment-success", "/restore"]) expect((await request.get(p)).headers()["x-robots-tag"]).toContain("noindex");
   expect((await request.get("/mice-backend/auth/v1/health")).status()).toBe(410);
   expect((await request.get("/dashboard", { maxRedirects: 0 })).status()).toBe(301);
