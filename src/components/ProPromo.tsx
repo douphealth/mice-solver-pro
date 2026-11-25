@@ -3,6 +3,7 @@ import { ArrowRight, CalendarCheck2, ClipboardList, Crown, FileText, LineChart, 
 import { Button } from "@/components/ui/button";
 import { PRO_NAME, PRO_PRICE_LABEL } from "@/lib/api";
 import { KEYS, readJSON } from "@/lib/storage";
+import { trackEvent } from "@/lib/analytics";
 
 export const PRO_FEATURES = [
   { icon: CalendarCheck2, title: "30-day schedule with real dates", body: "Day-by-day tasks tied to your answers, with one-tap calendar reminders." },
@@ -27,7 +28,7 @@ export default function ProPromo({ className = "", compact = false }: { classNam
           {!compact && (
             <div className="mt-6 flex flex-wrap items-center gap-4">
               <Button asChild variant="premium" size="xl">
-                <Link to="/pro">{hasSession ? "Open my Pro workspace" : `See what's inside · ${PRO_PRICE_LABEL}`}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+                <Link to="/pro" onClick={() => trackEvent("pro_cta_clicked", { path: "/" })}>{hasSession ? "Open my Pro workspace" : `See what's inside · ${PRO_PRICE_LABEL}`}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
               </Button>
               <p className="text-sm text-muted-foreground">One-time payment through Stripe.<br />No subscription.</p>
             </div>
@@ -44,7 +45,7 @@ export default function ProPromo({ className = "", compact = false }: { classNam
       </div>
       {compact && (
         <div className="border-t bg-secondary/40 px-6 py-4 md:px-10">
-          <Button asChild variant="premium" size="lg"><Link to="/pro">{hasSession ? "Open my Pro workspace" : `See what's inside · ${PRO_PRICE_LABEL}`}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></Button>
+          <Button asChild variant="premium" size="lg"><Link to="/pro" onClick={() => trackEvent("pro_cta_clicked", { path: "/" })}>{hasSession ? "Open my Pro workspace" : `See what's inside · ${PRO_PRICE_LABEL}`}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></Button>
         </div>
       )}
     </section>

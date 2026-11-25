@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { SEO } from "@/lib/site";
 import { SITE_ORIGIN } from "@/lib/sources";
+import { trackPageView } from "@/lib/analytics";
 
 function setMeta(selector: string, create: () => HTMLElement, apply: (el: HTMLElement) => void) {
   let el = document.head.querySelector<HTMLElement>(selector);
@@ -30,6 +31,7 @@ export default function RouteMetadata() {
       setMeta(`meta[name="${name}"]`, () => Object.assign(document.createElement("meta"), { name }), el => el.setAttribute("content", value));
     }
     window.scrollTo({ top: 0, left: 0 });
+    trackPageView(route);
   }, [pathname]);
   return null;
 }

@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, BadgeCheck, CreditCard, Loader2, LockKeyhole
 import PageShell from "@/components/layout/PageShell";
 import ProWorkspace from "@/components/pro/ProWorkspace";
 import { PRO_FEATURES } from "@/components/ProPromo";
+import FreeProCompare from "@/components/FreeProCompare";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Callout, ScopeNote, SectionHeading } from "@/components/ui-kit";
@@ -24,6 +25,7 @@ const FAQ = [
   { q: "Will it get rid of my mice?", a: "We can't promise results, and nobody honestly can. Pro organises the approaches the CDC and UC IPM describe so they're easier to carry out consistently. If signs continue, the workspace shows you when and how to bring in a professional." },
   { q: "How do I get back in on another phone or computer?", a: "Use the access link in your confirmation email, or the Restore my purchase page with the email you paid with." },
   { q: "Something went wrong with my order.", a: `Email ${CONTACT_EMAIL} with the email address you used at checkout and we'll help.` },
+  { q: "How do I ask for a refund?", a: `Email ${CONTACT_EMAIL} from, or mentioning, the email address you used at checkout. Refunds are issued through Stripe to your original payment method, and Pro access ends automatically once a refund goes through. Your free plan and tools stay available.` },
 ];
 
 function Sample() {
@@ -114,6 +116,11 @@ export default function ProPage() {
           <SectionHeading id="look-title" eyebrow="A quick look" title="What it looks like inside" align="center" />
           <Sample />
         </div>
+      </section>
+
+      <section className="section-y container-page" aria-labelledby="compare-pro">
+        <SectionHeading id="compare-pro" eyebrow="Free and Pro" title="What you get free, and what Pro adds" align="center">The free plan is complete on its own. Pro adds organisation for a month-long effort.</SectionHeading>
+        <FreeProCompare className="mx-auto max-w-4xl" />
       </section>
 
       <section className="section-y container-page" aria-labelledby="how-pro">

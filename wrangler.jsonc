@@ -15,9 +15,11 @@
     "not_found_handling": "none"
   },
   "observability": { "enabled": true },
+  // Anonymous funnel counts from /api/event (event name, app path, country). Query with the Analytics Engine SQL API.
+  "analytics_engine_datasets": [{ "binding": "EVENTS", "dataset": "mgg_planner_events" }],
   "vars": {
     "PUBLIC_ORIGIN": "https://elimination.micegoneguide.com",
-    "RELEASE": "stripe-access-mail-2026-11-22",
+    "RELEASE": "planner-audit-2026-11-25",
     // Live Stripe Payment Link and product for the Pro Masterplan (checked against Stripe on 2026-10-02).
     "PAYMENT_LINK_ID": "plink_1UCvLgGCqwm95OGXtz60RBjB",
     "PRODUCT_ID": "prod_UGIuz2PLtNFw3p",

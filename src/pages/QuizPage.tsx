@@ -135,7 +135,7 @@ export default function QuizPage() {
 
         <div className="mt-10 border-t pt-5">
           <ScopeNote />
-          <p className="mt-2 text-xs text-muted-foreground">Your answers stay in this browser. Nothing is sent anywhere unless you choose email check-ins.</p>
+          <p className="mt-2 text-xs text-muted-foreground">Your answers stay in this browser and are never sent to us.</p>
         </div>
       </section>
     </PageShell>

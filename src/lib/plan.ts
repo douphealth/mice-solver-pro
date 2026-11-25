@@ -1,9 +1,13 @@
 import type { QuizAnswers } from "./quiz-data";
-import type { SourceId } from "./sources";
+import { PET_POISON_HELP, POISON_HELP, type SourceId } from "./sources";
 
 export const PLANNER_LIMITATION =
   "This planner cannot diagnose an infestation, identify a species with certainty, estimate how many mice are present, assess disease risk or promise a clearance date.";
-export const METHOD_VERSION = "2026-10-02";
+export const METHOD_VERSION = "2026-11-25";
+
+/** What to do if bait may have been swallowed. Shown whenever children, pets or rodenticide are involved. */
+export const POISON_EMERGENCY =
+  `If a person may have swallowed rodent bait, call Poison Help at ${POISON_HELP.phone} (US) right away. If a pet may have, call your veterinarian or the ${PET_POISON_HELP.label} at ${PET_POISON_HELP.phone} (a fee may apply). Keep the product package to hand.`;
 
 export type Phase = "today" | "week" | "ongoing";
 export type StatusLevel = "attention" | "verify" | "unconfirmed";
@@ -28,7 +32,7 @@ export interface Plan {
   actions: ActionItem[];
   rooms: RoomPrompt[];
   watchFor: string[];
-  flags: { physical: boolean; kids: boolean; pets: boolean; multiunit: boolean; returning: boolean; foodOpen: boolean };
+  flags: { physical: boolean; kids: boolean; pets: boolean; multiunit: boolean; returning: boolean; foodOpen: boolean; poisonRisk: boolean };
 }
 
 const PHYSICAL: Record<string, string> = {
@@ -150,7 +154,13 @@ export function generatePlan(input: QuizAnswers | unknown): Plan {
     actions.push({
       id: "t-poison", phase: "today", tone: "safety", source: "ucipm",
       title: "Keep rodenticide in locked, tamper-resistant stations",
-      detail: "All rodenticides are toxic to people, pets and wildlife. Keep bait out of reach, follow the label exactly and don't add other products on top. UC IPM also notes that mice poisoned indoors may die inside the structure, which can cause odor.",
+      detail: "UC IPM warns that all rodenticides are toxic to people, pets and wildlife. Keep bait out of reach, follow the label exactly and don't add other products on top. UC IPM also notes that mice poisoned indoors may die inside the structure, which can cause odor. " + POISON_EMERGENCY,
+    });
+  } else if (kids || pets) {
+    actions.push({
+      id: "t-bait-safety", phase: "today", tone: "safety", source: "epa-bait",
+      title: "If you ever use poison bait, keep it locked away",
+      detail: "The EPA says to place traps and baits only where children and pets can't reach them, to use rodenticide only in tamper-resistant bait stations and to store pesticides locked away from food, including pet food. " + POISON_EMERGENCY,
     });
   }
   if (previously("ultrasonic") || previously("peppermint")) {
@@ -187,6 +197,11 @@ export function generatePlan(input: QuizAnswers | unknown): Plan {
     title: "Seal what you find with materials mice can't chew",
     detail: "The CDC suggests steel wool for small holes, held in place with caulk or spray foam, and lath screen, metal, cement or hardware cloth for larger ones. UC IPM stresses that plastic, rubber, vinyl, wood and foam on its own are easy to gnaw through.",
     learnMore: { to: "/tools/entry-points", label: "Entry-gap checklist" },
+  });
+  actions.push({
+    id: "w-humane", phase: "week", source: "epa-options",
+    title: "Prefer not to kill mice? Know the trade-offs",
+    detail: "Removing food and sealing gaps are the non-lethal core of this plan, and UC IPM calls exclusion the most successful and permanent form of house-mouse control. The EPA notes that live traps catch rodents unharmed, but the animals must then be released or killed, and released mice may find their way back unless entry points are sealed. The CDC advises against live traps because a frightened rodent may urinate, so wear gloves. UC IPM, a University of California source, says live-trapped mice need removing from the trap frequently, that it is illegal there to move house mice off the property where they were caught, and that relocation is ineffective. Check your local rules before releasing any animal.",
   });
   if (multiunit) {
     actions.push({
@@ -236,7 +251,7 @@ export function generatePlan(input: QuizAnswers | unknown): Plan {
   actions.push({
     id: "o-escalate", phase: "ongoing", source: "cdc-trap",
     title: "Decide in advance when to call a professional",
-    detail: "The CDC says that if trapping does not resolve the problem you can consider a poison bait station or seek professional help. Signs in places you can't reach, hazards listed above and activity that continues after cleanup and sealing are all good reasons to call.",
+    detail: "The CDC says that if trapping does not resolve the problem you can consider a poison bait station or seek professional help. If you use bait, the EPA says to use only tamper-resistant bait stations placed where children and pets can't reach them. Signs in places you can't reach, hazards listed above and activity that continues after cleanup and sealing are all good reasons to call.",
   });
 
   // ---- Priorities (top three) ----
@@ -270,7 +285,7 @@ export function generatePlan(input: QuizAnswers | unknown): Plan {
     actions,
     rooms,
     watchFor,
-    flags: { physical: havePhysical, kids, pets, multiunit, returning, foodOpen },
+    flags: { physical: havePhysical, kids, pets, multiunit, returning, foodOpen, poisonRisk: kids || pets || previously("poison") },
   };
 }
 

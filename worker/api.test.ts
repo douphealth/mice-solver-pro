@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import worker from "./index";
+import worker, { routeHead } from "./index";
 import { hmacSha256Hex } from "./stripe";
 import type { Env } from "./types";
 
@@ -178,6 +178,21 @@ describe("/api/restore", () => {
     expect(await none.json()).toEqual(foundBody);
     expect(calls.brevo).toHaveLength(0);
   });
+  it("skips a refunded newer purchase and sends the link for the earlier one that still grants access", async () => {
+    const REFUNDED = "cs_live_REFUNDEDREFUNDED1";
+    listResult = [paidSession({ id: SID, created: 1 }), paidSession({ id: REFUNDED, created: 5 })];
+    sessions[REFUNDED] = paidSession({ id: REFUNDED, created: 5, payment_intent: { latest_charge: { refunded: true, amount: 999, amount_refunded: 999 } } });
+    expect((await post("/api/restore", { email: "jordan@example.com" })).status).toBe(200);
+    const mail = calls.brevo.find(c => c.path === "/smtp/email")!;
+    expect(mail.body.htmlContent).toContain(`session_id=${SID}`);
+    expect(mail.body.htmlContent).not.toContain(REFUNDED);
+  });
+  it("sends nothing when the only purchase was refunded", async () => {
+    sessions[SID] = paidSession({ payment_intent: { latest_charge: { refunded: true, amount: 999, amount_refunded: 999 } } });
+    listResult = [sessions[SID]];
+    expect((await post("/api/restore", { email: "jordan@example.com" })).status).toBe(200);
+    expect(calls.brevo).toHaveLength(0);
+  });
   it("validates input and handles missing configuration", async () => {
     expect((await post("/api/restore", { email: "nope" })).status).toBe(400);
     expect((await post("/api/restore", "{bad json")).status).toBe(400);
@@ -320,7 +335,7 @@ describe("static app", () => {
     const nf = await get("/nothing-here");
     expect(nf.status).toBe(404);
     expect(nf.headers.get("x-robots-tag")).toBe("noindex");
-    expect(await nf.text()).toContain("<title>app</title>");
+    expect(await nf.text()).toContain("<title>Page not found | MiceGoneGuide</title>");
     expect((await get("/assets/index-abc.js")).headers.get("cache-control")).toContain("immutable");
     const redirect = await get("/dashboard");
     expect(redirect.status).toBe(301);
@@ -332,5 +347,53 @@ describe("static app", () => {
     expect((await post("/quiz", {})).status).toBe(405);
     const other = await worker.fetch(new Request("https://evil.example/"), baseEnv());
     expect(other.status).toBe(404);
+  });
+});
+
+describe("/api/event", () => {
+  it("counts allowlisted events with an allowlisted path and nothing else", async () => {
+    const points: any[] = [];
+    const env = baseEnv({ EVENTS: { writeDataPoint: p => points.push(p) } });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    expect((await post("/api/event", { event: "checkout_started", path: "/pro" }, env)).status).toBe(204);
+    expect((await post("/api/event", { event: "planner_complete", path: "/plan?email=a@b.co", email: "a@b.co" }, env)).status).toBe(204);
+    expect((await post("/api/event", { event: "made_up" }, env)).status).toBe(204);
+    expect((await post("/api/event", { event: "planner_start" }, env, { origin: "https://evil.example" })).status).toBe(204);
+    expect((await get("/api/event", env)).status).toBe(204);
+    expect(points).toEqual([
+      { blobs: ["checkout_started", "/pro", ""], doubles: [1], indexes: ["checkout_started"] },
+      { blobs: ["planner_complete", "", ""], doubles: [1], indexes: ["planner_complete"] },
+    ]);
+    expect(JSON.stringify(log.mock.calls)).not.toContain("a@b.co");
+    log.mockRestore();
+  });
+  it("works without the Analytics Engine binding", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    expect((await post("/api/event", { event: "planner_start" })).status).toBe(204);
+    expect(log).toHaveBeenCalledWith(JSON.stringify({ mgg_event: "planner_start", path: "", country: "" }));
+    log.mockRestore();
+  });
+});
+
+describe("per-route head for crawlers", () => {
+  const shell = '<title>Home | MiceGoneGuide</title><meta name="description" content="home" /><meta name="robots" content="index, follow" /><link rel="canonical" href="https://elimination.micegoneguide.com/" /><meta property="og:url" content="https://elimination.micegoneguide.com/" /><meta property="og:title" content="t" /><meta property="og:description" content="d" /><meta name="twitter:title" content="t" /><meta name="twitter:description" content="d" />';
+  it("gives each public route its own title, description and self-canonical", () => {
+    const out = routeHead(shell, ORIGIN, "/tools/entry-points", false);
+    expect(out).toContain("<title>Mouse Entry-Gap Inspection Checklist | MiceGoneGuide</title>");
+    expect(out).toContain('<link rel="canonical" href="https://elimination.micegoneguide.com/tools/entry-points"');
+    expect(out).toContain('<meta property="og:url" content="https://elimination.micegoneguide.com/tools/entry-points"');
+    expect(out).toContain('<meta name="robots" content="index, follow"');
+    expect(out).not.toContain('content="home"');
+  });
+  it("marks private routes and unknown pages noindex", () => {
+    expect(routeHead(shell, ORIGIN, "/plan", false)).toContain('<meta name="robots" content="noindex, follow"');
+    const nf = routeHead(shell, ORIGIN, "/nope", true);
+    expect(nf).toContain("<title>Page not found | MiceGoneGuide</title>");
+    expect(nf).toContain('<meta name="robots" content="noindex"');
+  });
+  it("is applied to served HTML", async () => {
+    const res = await get("/quiz");
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("<title>Build Your Free Mouse Control Plan | MiceGoneGuide</title>");
   });
 });

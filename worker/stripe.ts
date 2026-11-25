@@ -90,20 +90,27 @@ export async function checkEntitlement(env: Env, sessionId: string): Promise<{ e
   return { entitlement: evaluateSession(res.data, env), session: res.data, refundCheck };
 }
 
-/** Find the latest paid session of this product for a checkout email. Used by "restore my purchase". */
+/**
+ * Find the newest purchase of this product for a checkout email that still grants access. Used by "restore my purchase".
+ * Candidates are matched with the same rule as the unlock (evaluateSession), then re-checked one by one with
+ * checkEntitlement so a refunded or disputed purchase is skipped in favour of an earlier valid one.
+ */
 export async function findPaidSessionByEmail(env: Env, email: string): Promise<string | null> {
   const variants = [...new Set([email.trim().toLowerCase(), email.trim()])];
-  let best: { id: string; created: number } | null = null;
+  const candidates = new Map<string, number>();
   for (const v of variants) {
     const res = await stripeGet(env, "/v1/checkout/sessions", [["customer_details[email]", v], ["limit", "20"]]);
     if (!res.ok || !Array.isArray(res.data?.data)) continue;
     for (const s of res.data.data) {
-      if (s.payment_link === env.PAYMENT_LINK_ID && s.payment_status === "paid" && s.status === "complete" && (!best || s.created > best.created)) {
-        best = { id: s.id, created: s.created };
-      }
+      if (SESSION_ID_RE.test(String(s?.id || "")) && evaluateSession(s, env).active) candidates.set(s.id, Number(s.created) || 0);
     }
   }
-  return best?.id ?? null;
+  const newestFirst = [...candidates.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  for (const [id] of newestFirst) {
+    const { entitlement } = await checkEntitlement(env, id);
+    if (entitlement.active) return id;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- webhook signatures

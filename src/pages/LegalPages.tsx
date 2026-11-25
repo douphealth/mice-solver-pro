@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import PageShell from "@/components/layout/PageShell";
 import { CONTACT_EMAIL } from "@/lib/sources";
 
-const UPDATED = "2 October 2026";
+const UPDATED = "25 November 2026";
 
 function Doc({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -31,7 +31,7 @@ export function PrivacyPage() {
         </ul>
       </section>
       <section><h2>What is stored in your browser</h2><p>Quiz answers, checklist progress, trap layout, evidence log entries, your plan start date and, after a Pro purchase, your access link and a saved copy of your Pro content so it opens if you're offline. Clear your browser's site data to remove all of it. Export your evidence log to CSV first if you want to keep it.</p></section>
-      <section><h2>Analytics and cookies</h2><p>We don't set cookies. Cloudflare, which hosts this site, may add its Web Analytics beacon, a cookieless measurement of page views and load performance that doesn't track you across sites. We run no other analytics, and none will be added without your consent.</p></section>
+      <section><h2>Analytics and cookies</h2><p>We don't set cookies. Cloudflare, which hosts this site, may add its Web Analytics beacon, a cookieless measurement of page views and load performance that doesn't track you across sites.</p><p>We also count a few anonymous steps so we can see whether the planner is useful, such as "quiz finished", "plan PDF downloaded" or "checkout opened". Each count holds only the step name, the app page it happened on and your country as reported by Cloudflare. It never includes your answers, email, IP address, an identifier or a cookie, and it can't be linked to you. If your browser sends Do Not Track or Global Privacy Control, nothing is counted. We run no advertising or cross-site trackers.</p></section>
       <section><h2>Your choices</h2><p>To unsubscribe, delete your information or ask a question, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p></section>
     </Doc>
   );
@@ -47,6 +47,7 @@ export function TermsPage() {
           <li>It's a one-time digital purchase paid through Stripe at the price shown at checkout. It isn't a subscription.</li>
           <li>After payment, we confirm the purchase with Stripe and unlock an online workspace, which you can also download as a PDF. An access link is emailed to the address on the purchase.</li>
           <li>Access ends if the payment is refunded or reversed through Stripe.</li>
+          <li>To ask for a refund, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with the email address you used at checkout. Refunds are issued through Stripe to the original payment method.</li>
           <li>If something goes wrong with your order, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> with the email you used at checkout.</li>
           <li>Please don't share your access link. It's personal to your purchase.</li>
         </ul>
