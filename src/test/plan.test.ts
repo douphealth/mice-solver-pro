@@ -100,6 +100,35 @@ describe("observation-based planning", () => {
   });
 });
 
+describe("poison safety and humane options", () => {
+  it("adds bait safety with emergency numbers for homes with children or pets, and never otherwise", () => {
+    const withKids = generatePlan({ evidence: ["droppings"], household: ["kids"] });
+    const bait = withKids.actions.find(a => a.id === "t-bait-safety")!;
+    expect(bait.tone).toBe("safety");
+    expect(bait.source).toBe("epa-bait");
+    expect(bait.detail).toContain("1-800-222-1222");
+    expect(bait.detail).toContain("(888) 426-4435");
+    expect(withKids.flags.poisonRisk).toBe(true);
+    const none = generatePlan({ evidence: ["droppings"], household: ["none"] });
+    expect(none.actions.some(a => a.id === "t-bait-safety" || a.id === "t-poison")).toBe(false);
+    expect(none.flags.poisonRisk).toBe(false);
+  });
+  it("puts the emergency numbers on the rodenticide step when poison was already used", () => {
+    const plan = generatePlan({ evidence: ["droppings"], previous: ["poison"], household: ["pets_dog"] });
+    expect(plan.actions.find(a => a.id === "t-poison")!.detail).toContain("1-800-222-1222");
+    expect(plan.actions.some(a => a.id === "t-bait-safety")).toBe(false);
+  });
+  it("explains humane options with their trade-offs in every plan", () => {
+    const humane = generatePlan({}).actions.find(a => a.id === "w-humane")!;
+    expect(humane.source).toBe("epa-options");
+    expect(humane.detail).toMatch(/live traps/);
+    expect(humane.detail).toMatch(/local rules/);
+  });
+  it("tells people to keep any escalation bait tamper-resistant", () => {
+    expect(generatePlan({}).actions.find(a => a.id === "o-escalate")!.detail).toMatch(/tamper-resistant bait stations/);
+  });
+});
+
 describe("quiz data and answer sanitising", () => {
   it("has unique ids and an exclusive 'none' style option where needed", () => {
     for (const step of quizSteps) {

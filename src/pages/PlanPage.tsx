@@ -1,21 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AlertTriangle, CalendarPlus, CheckCircle2, ChevronRight, Download, Eye, FileDown, Pencil, RotateCcw, Share2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarPlus, CheckCircle2, ChevronRight, Download, ExternalLink, Eye, FileDown, Pencil, Phone, RotateCcw, Share2 } from "lucide-react";
 import PageShell from "@/components/layout/PageShell";
 import EmailOptIn from "@/components/EmailOptIn";
-import ProPromo from "@/components/ProPromo";
+import FreeProCompare from "@/components/FreeProCompare";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Callout, CheckRow, ProgressRing, ScopeNote, Sources } from "@/components/ui-kit";
 import { GapGauge } from "@/components/illustrations";
-import { actionsByPhase, firstSentence, generatePlan, PHASE_META, type Phase, type Plan } from "@/lib/plan";
+import { actionsByPhase, firstSentence, generatePlan, PHASE_META, POISON_EMERGENCY, type Phase, type Plan } from "@/lib/plan";
 import { CLEANUP_PRO_HELP, CLEANUP_PROCEDURES, MATERIALS } from "@/lib/guides";
 import { isComplete, loadAnswers, saveAnswers } from "@/lib/answers";
 import { buildIcs, downloadText } from "@/lib/ics";
 import { trapCheckDays } from "@/lib/schedule";
 import { useChecks } from "@/lib/storage";
 import { trackEvent } from "@/lib/analytics";
-import { SITE_ORIGIN, SOURCES } from "@/lib/sources";
+import { GUIDES, PET_POISON_HELP, POISON_HELP, SITE_ORIGIN, SOURCES } from "@/lib/sources";
+import { PRO_NAME, PRO_PRICE_LABEL } from "@/lib/api";
+import { KEYS, readJSON } from "@/lib/storage";
 import type { QuizAnswers } from "@/lib/quiz-data";
 
 const STATUS_STYLE: Record<Plan["status"]["level"], { box: string; chip: string; Icon: typeof AlertTriangle; chipText: string }> = {
@@ -185,6 +187,15 @@ export default function PlanPage() {
               </TabsContent>
 
               <TabsContent value="help" className="mt-6 space-y-5">
+                {plan.flags.poisonRisk && (
+                  <Callout tone="safety" title="If someone may have swallowed rodent bait">
+                    <span data-testid="poison-emergency">{POISON_EMERGENCY}</span>
+                    <span className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                      <a className="inline-flex items-center gap-1 font-semibold text-primary underline" href={`tel:${POISON_HELP.phone.replace(/[^0-9]/g, "")}`}><Phone className="h-3.5 w-3.5" aria-hidden="true" />Call {POISON_HELP.phone}</a>
+                      <a className="inline-flex items-center gap-1 font-semibold text-primary underline" href={`tel:${PET_POISON_HELP.phone.replace(/[^0-9]/g, "")}`}><Phone className="h-3.5 w-3.5" aria-hidden="true" />Pet: {PET_POISON_HELP.phone}</a>
+                    </span>
+                  </Callout>
+                )}
                 {plan.hazards.length > 0 && (
                   <div className="space-y-3">{plan.hazards.map(h => <Callout key={h.id} tone="safety" title={h.title}>{h.detail}</Callout>)}</div>
                 )}
@@ -200,7 +211,7 @@ export default function PlanPage() {
             </Tabs>
           </section>
 
-          <ProPromo />
+          <NextStep />
           <EmailOptIn />
 
           <section className="rounded-2xl border bg-secondary/40 p-6" aria-labelledby="how-built">
@@ -234,9 +245,37 @@ export default function PlanPage() {
               <li><Link className="font-medium text-primary hover:underline" to="/tools/calculator">Signs & next steps</Link></li>
             </ul>
           </div>
+          <div className="card-soft p-5 text-sm">
+            <p className="font-display text-lg font-bold">Guides on MiceGoneGuide</p>
+            <ul className="mt-2 space-y-2">
+              {GUIDES.map(g => <li key={g.url}><a className="inline-flex items-center gap-1 font-medium text-primary hover:underline" href={g.url}>{g.label}<ExternalLink className="h-3 w-3" aria-hidden="true" /></a></li>)}
+            </ul>
+          </div>
           <Button variant="outline" className="w-full" onClick={downloadPdf} disabled={busy === "pdf"}><Download className="h-4 w-4" aria-hidden="true" />Download PDF</Button>
         </aside>
       </div>
     </PageShell>
+  );
+}
+
+/** The call to action after the free plan: an honest free-vs-Pro comparison and one clear next step. */
+function NextStep() {
+  const hasSession = Boolean(readJSON<{ sessionId?: string } | null>(KEYS.pro, null)?.sessionId);
+  return (
+    <section className="relative overflow-hidden rounded-3xl border-2 border-[hsl(38_88%_56%/0.5)] bg-card" aria-labelledby="next-step-title" data-testid="plan-next-step">
+      <div className="absolute inset-x-0 top-0 h-1.5 bg-premium-gradient" />
+      <div className="p-5 md:p-8">
+        <p className="eyebrow mb-2">Your next step</p>
+        <h2 id="next-step-title" className="text-2xl font-bold leading-tight md:text-3xl">Your free plan is complete. Want it as a dated 30-day programme?</h2>
+        <p className="mt-2 max-w-2xl text-muted-foreground">Everything above stays free. The {PRO_NAME} adds dated daily tasks, full room protocols, a trap layout helper and an evidence log, so a month of checking traps and sealing gaps is easier to keep up. It's a planning workspace, not a promise of results.</p>
+        <FreeProCompare className="mt-5" />
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Button asChild variant="premium" size="xl" className="w-full sm:w-auto">
+            <Link to="/pro" onClick={() => trackEvent("pro_cta_clicked", { path: "/plan" })}>{hasSession ? "Open my Pro workspace" : `See the ${PRO_NAME} · ${PRO_PRICE_LABEL}`}<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+          </Button>
+          <p className="text-sm text-muted-foreground">One-time payment through Stripe. No subscription, no account.</p>
+        </div>
+      </div>
+    </section>
   );
 }

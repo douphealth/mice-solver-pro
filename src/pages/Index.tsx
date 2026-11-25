@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, Check, ClipboardCheck, Lock, Minus, ScanSearch, ShieldCheck, Timer } from "lucide-react";
+import { ArrowRight, Check, ClipboardCheck, Lock, ScanSearch, ShieldCheck, Timer } from "lucide-react";
+import FreeProCompare from "@/components/FreeProCompare";
 import PageShell from "@/components/layout/PageShell";
 import JsonLd from "@/components/JsonLd";
 import ProPromo from "@/components/ProPromo";
@@ -28,23 +29,6 @@ const FAQ = [
   { q: "What does the Pro Masterplan add, and how does paying work?", a: `Pro adds a dated 30-day schedule, full room protocols, a trap layout helper, an evidence log with a weekly chart, a sealing materials guide, a supply checklist, a pro-call kit and a workbook PDF. It's ${PRO_PRICE_LABEL} once, paid through Stripe. After payment you're returned here, we confirm the purchase with Stripe and unlock your workspace. An access link is also emailed so you can restore it on any device.` },
   { q: "Will following the plan solve my mouse problem?", a: "We can't promise that. The plan follows the approaches the CDC and UC IPM describe (food control, trapping, safe cleanup and sealing gaps), but every home is different. If signs continue, get professional help." },
 ];
-
-const COMPARE: [string, string | boolean, string | boolean][] = [
-  ["Personalised action plan: today, this week, ongoing", true, true],
-  ["Safe cleanup, trap placement and entry-gap guides", true, true],
-  ["Printable PDF of your plan", true, true],
-  ["Calendar reminders for trap checks", "14 days", "Full 30-day schedule"],
-  ["Dated 30-day schedule tailored to your answers", false, true],
-  ["Room-by-room protocols", "Short prompts", "Full protocols"],
-  ["Trap layout helper (UC IPM spacing)", false, true],
-  ["Evidence log with weekly chart and CSV export", false, true],
-  ["Supply checklist and sealing materials guide", "Basics", "Detailed"],
-  ["When-to-call-a-pro kit and seasonal calendar", false, true],
-  ["Pro PDF workbook with log sheets", false, true],
-];
-
-const Cell = ({ v }: { v: string | boolean }) =>
-  v === true ? <Check className="mx-auto h-5 w-5 text-success" aria-label="Included" /> : v === false ? <Minus className="mx-auto h-5 w-5 text-muted-foreground/50" aria-label="Not included" /> : <span className="text-sm font-medium">{v}</span>;
 
 export default function Index() {
   const sample = useMemo(() => generatePlan({ evidence: ["droppings", "gnaw_marks"], location: ["kitchen"], home_type: "detached", household: ["kids", "pets_cat"], previous: ["glue_traps"], food_storage: "mixed", duration: "weeks" }), []);
@@ -127,29 +111,7 @@ export default function Index() {
       <section className="bg-secondary/50 section-y" aria-labelledby="compare-title">
         <div className="container-page">
           <SectionHeading id="compare-title" eyebrow="Free and Pro" title="Start free. Upgrade only if it helps" align="center">The free plan is complete on its own. Pro adds organisation for a month-long effort.</SectionHeading>
-          <div className="card-soft overflow-hidden">
-            <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Free and Pro comparison table, scrollable">
-              <table className="w-full min-w-[34rem] text-left">
-                <caption className="sr-only">Comparison of the free plan and the Pro Masterplan</caption>
-                <thead>
-                  <tr className="border-b bg-secondary/60">
-                    <th scope="col" className="p-4 text-sm font-semibold">What's included</th>
-                    <th scope="col" className="w-36 p-4 text-center text-sm font-semibold">Free</th>
-                    <th scope="col" className="w-44 bg-[hsl(41_100%_60%/0.18)] p-4 text-center text-sm font-bold">Pro · {PRO_PRICE_LABEL}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARE.map(([label, free, pro]) => (
-                    <tr key={label} className="border-b last:border-0">
-                      <th scope="row" className="p-4 text-sm font-medium">{label}</th>
-                      <td className="p-4 text-center"><Cell v={free} /></td>
-                      <td className="bg-[hsl(41_100%_60%/0.08)] p-4 text-center"><Cell v={pro} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <FreeProCompare />
           <div className="mt-6 text-center"><Button asChild variant="premium" size="lg"><Link to="/pro">See what's inside Pro</Link></Button></div>
         </div>
       </section>

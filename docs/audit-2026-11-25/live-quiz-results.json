@@ -1,0 +1,300 @@
+[
+  {
+    "viewport": "desktop",
+    "scenario": "A-droppings-kitchen-house",
+    "errors": [],
+    "pdf": "ok MiceGoneGuide-Mouse-Control-Plan.pdf",
+    "h1": [
+      "Your mouse control plan"
+    ],
+    "status": "Physical signs reported: inspect and verify",
+    "startHere": [
+      "Set snap traps where you found signs",
+      "Keep food storage airtight",
+      "Gather your cleanup and trapping supplies"
+    ],
+    "actions": [
+      "Record what you found and where",
+      "Keep food storage airtight",
+      "Gather your cleanup and trapping supplies",
+      "Cleanup guide",
+      "Set snap traps where you found signs",
+      "Trap placement guide",
+      "Check traps every day",
+      "Trap placement guide",
+      "Clean up safely. Never sweep or vacuum waste",
+      "Cleanup guide",
+      "Inspect for gaps a pencil could fit through",
+      "Entry-gap checklist",
+      "Seal what you find with materials mice can't chew",
+      "Entry-gap checklist",
+      "Keep trapping until catches and new signs stop",
+      "Reduce outdoor food and shelter",
+      "Re-check your seals before autumn",
+      "Decide in advance when to call a professional"
+    ],
+    "overflow": false,
+    "robots": "noindex, follow",
+    "proCta": [
+      "Pro Masterplan",
+      "See what's inside · $9.99",
+      "Pro Masterplan"
+    ],
+    "rooms": "Kitchen\n\nLook behind the stove and refrigerator, in the backs of cabinets and drawers, and around sink plumbing. Protect food and food-contact surfaces. Only move appliances you can disconnect and move safely.\n\nPro adds a full protocol for each room: what to inspect, where to trap, what to store and what to watch for.",
+    "help": "Good reasons to call a professional\nSigns keep appearing after a week or more of consistent trapping, safe cleanup and sealing.\nEvidence is in places you can't safely reach, such as inside walls, ducts, a crawl space or a roof void.\nYou develop symptoms after possible rodent exposure. Talk to a healthcare provider and mention the exposure, as the CDC advises.\nFrom the CDC\nEvidence that rodents have been in heating or cooling ducts: contact a professional rodent-control service. Duct-cleaning companies know the risks.\nHeavy infestations, vacant buildings with large numbers of rodents, or confirmed rodent-borne disease in the local rodent population: special precautions apply. Contact your local health department with questions about your situation.\nIllness you think may be linked to rodents: talk to a healthcare provider and tell them about any exposure.",
+    "textLength": 7761,
+    "hasPoisonWarning": false,
+    "hasGlueStop": false,
+    "hasHazard": false
+  },
+  {
+    "viewport": "desktop",
+    "scenario": "B-hazards-apartment-kids-glue",
+    "errors": [],
+    "pdf": "ok MiceGoneGuide-Mouse-Control-Plan.pdf",
+    "h1": [
+      "Your mouse control plan"
+    ],
+    "status": "Reported conditions need qualified attention",
+    "startHere": [
+      "Keep clear of damaged wiring",
+      "Leave duct contamination to professionals",
+      "Stop using glue traps"
+    ],
+    "actions": [
+      "Keep clear of damaged wiring",
+      "Leave duct contamination to professionals",
+      "Stop using glue traps",
+      "Keep rodenticide in locked, tamper-resistant stations",
+      "Record what you found and where",
+      "Move chewable packaging into hard containers",
+      "Gather your cleanup and trapping supplies",
+      "Cleanup guide",
+      "Set snap traps where you found signs",
+      "Trap placement guide",
+      "Check traps every day",
+      "Trap placement guide",
+      "Clean up safely. Never sweep or vacuum waste",
+      "Cleanup guide",
+      "Inspect for gaps a pencil could fit through",
+      "Entry-gap checklist",
+      "Seal what you find with materials mice can't chew",
+      "Entry-gap checklist",
+      "Tell your landlord or building manager",
+      "Keep trapping until catches and new signs stop",
+      "Re-inspect your earlier repairs",
+      "Reduce outdoor food and shelter",
+      "Re-check your seals before autumn",
+      "Decide in advance when to call a professional"
+    ],
+    "overflow": false,
+    "robots": "noindex, follow",
+    "proCta": [
+      "Pro Masterplan",
+      "See what's inside · $9.99",
+      "Pro Masterplan"
+    ],
+    "rooms": "Kitchen\n\nLook behind the stove and refrigerator, in the backs of cabinets and drawers, and around sink plumbing. Protect food and food-contact surfaces. Only move appliances you can disconnect and move safely.\n\nAttic\n\nInspect only from safe, accessible spots and don't step on unsupported ceilings. Leave contaminated insulation alone until you have read the CDC cleanup steps for insulation.\n\nPro adds a full protocol for each room: what to inspect, where to trap, what to store and what to watch for.",
+    "help": "Keep clear of damaged wiring\n\nDon't touch or move it. Arrange an assessment by a qualified electrician. Smoke, sparks or a burning smell need an emergency response. UC IPM notes that mice gnaw wires and that rodent gnawing is suspected in many fires of unknown origin.\n\nLeave duct contamination to professionals\n\nDon't clean the heating or cooling system yourself. The CDC advises contacting a professional rodent-control service when there is evidence that rodents have accessed ventilation systems; duct-cleaning companies know the risks.\nGood reasons to call a professional\nYou reported damaged wiring, duct contamination or heavy contamination. Ask a qualified professional before you proceed.\nSigns keep appearing after a week or more of consistent trapping, safe cleanup and sealing.\nEvidence is in places you can't safely reach, such as inside walls, ducts, a crawl space or a roof void.\nYou develop symptoms after possible rodent exposure. Talk to a healthcare provider and mention the exposure, as the CDC advises.\nFrom the CDC\nEvidence that rodents have been in heating or cooling ducts: contact a professional rodent-control service. Duct-cleaning companies know the risks.\nHeavy infestations, vacant buildings with large numbers of rodents, or confirmed rodent-borne disease in the local rodent population: special precautions apply. Contact your local health department with questions about your situation.\nIllness you think may be linked to rodents: talk to a healthcare provider and tell them about any exposure.",
+    "textLength": 9400,
+    "hasPoisonWarning": true,
+    "hasGlueStop": true,
+    "hasHazard": true
+  },
+  {
+    "viewport": "desktop",
+    "scenario": "C-noises-only-walls-pets-ultrasonic",
+    "errors": [],
+    "pdf": "ok MiceGoneGuide-Mouse-Control-Plan.pdf",
+    "h1": [
+      "Your mouse control plan"
+    ],
+    "status": "Activity not confirmed by physical evidence",
+    "startHere": [
+      "Close off open food and pet bowls now",
+      "Look for physical evidence before you act",
+      "Gather your cleanup and trapping supplies"
+    ],
+    "actions": [
+      "Look for physical evidence before you act",
+      "Close off open food and pet bowls now",
+      "Gather your cleanup and trapping supplies",
+      "Cleanup guide",
+      "Don't rely on repellents or ultrasonic devices",
+      "Clean up safely. Never sweep or vacuum waste",
+      "Cleanup guide",
+      "Inspect for gaps a pencil could fit through",
+      "Entry-gap checklist",
+      "Seal what you find with materials mice can't chew",
+      "Entry-gap checklist",
+      "Check skirting and the base of the home",
+      "Keep trapping until catches and new signs stop",
+      "Re-inspect for missed gaps",
+      "Reduce outdoor food and shelter",
+      "Re-check your seals before autumn",
+      "Decide in advance when to call a professional"
+    ],
+    "overflow": false,
+    "robots": "noindex, follow",
+    "proCta": [
+      "Pro Masterplan",
+      "See what's inside · $9.99",
+      "Pro Masterplan"
+    ],
+    "rooms": "Near or inside walls\n\nInspect the accessible edges on both sides of the wall. Sounds can't pinpoint a nest, so don't cut into drywall or put loose poison into a wall void.\n\nBedroom\n\nInspect accessible edges, closets and under furniture. Remove food, and keep traps and bait where children and pets can't reach.\n\nPro adds a full protocol for each room: what to inspect, where to trap, what to store and what to watch for.",
+    "help": "Good reasons to call a professional\nSigns keep appearing after a week or more of consistent trapping, safe cleanup and sealing.\nEvidence is in places you can't safely reach, such as inside walls, ducts, a crawl space or a roof void.\nYou develop symptoms after possible rodent exposure. Talk to a healthcare provider and mention the exposure, as the CDC advises.\nFrom the CDC\nEvidence that rodents have been in heating or cooling ducts: contact a professional rodent-control service. Duct-cleaning companies know the risks.\nHeavy infestations, vacant buildings with large numbers of rodents, or confirmed rodent-borne disease in the local rodent population: special precautions apply. Contact your local health department with questions about your situation.\nIllness you think may be linked to rodents: talk to a healthcare provider and tell them about any exposure.",
+    "textLength": 7928,
+    "hasPoisonWarning": false,
+    "hasGlueStop": false,
+    "hasHazard": false
+  },
+  {
+    "viewport": "mobile375",
+    "scenario": "A-droppings-kitchen-house",
+    "errors": [],
+    "pdf": "ok MiceGoneGuide-Mouse-Control-Plan.pdf",
+    "h1": [
+      "Your mouse control plan"
+    ],
+    "status": "Physical signs reported: inspect and verify",
+    "startHere": [
+      "Set snap traps where you found signs",
+      "Keep food storage airtight",
+      "Gather your cleanup and trapping supplies"
+    ],
+    "actions": [
+      "Record what you found and where",
+      "Keep food storage airtight",
+      "Gather your cleanup and trapping supplies",
+      "Cleanup guide",
+      "Set snap traps where you found signs",
+      "Trap placement guide",
+      "Check traps every day",
+      "Trap placement guide",
+      "Clean up safely. Never sweep or vacuum waste",
+      "Cleanup guide",
+      "Inspect for gaps a pencil could fit through",
+      "Entry-gap checklist",
+      "Seal what you find with materials mice can't chew",
+      "Entry-gap checklist",
+      "Keep trapping until catches and new signs stop",
+      "Reduce outdoor food and shelter",
+      "Re-check your seals before autumn",
+      "Decide in advance when to call a professional"
+    ],
+    "overflow": false,
+    "robots": "noindex, follow",
+    "proCta": [
+      "Pro Masterplan",
+      "See what's inside · $9.99",
+      "Pro Masterplan"
+    ],
+    "rooms": "Kitchen\n\nLook behind the stove and refrigerator, in the backs of cabinets and drawers, and around sink plumbing. Protect food and food-contact surfaces. Only move appliances you can disconnect and move safely.\n\nPro adds a full protocol for each room: what to inspect, where to trap, what to store and what to watch for.",
+    "help": "Good reasons to call a professional\nSigns keep appearing after a week or more of consistent trapping, safe cleanup and sealing.\nEvidence is in places you can't safely reach, such as inside walls, ducts, a crawl space or a roof void.\nYou develop symptoms after possible rodent exposure. Talk to a healthcare provider and mention the exposure, as the CDC advises.\nFrom the CDC\nEvidence that rodents have been in heating or cooling ducts: contact a professional rodent-control service. Duct-cleaning companies know the risks.\nHeavy infestations, vacant buildings with large numbers of rodents, or confirmed rodent-borne disease in the local rodent population: special precautions apply. Contact your local health department with questions about your situation.\nIllness you think may be linked to rodents: talk to a healthcare provider and tell them about any exposure.",
+    "textLength": 7711,
+    "hasPoisonWarning": false,
+    "hasGlueStop": false,
+    "hasHazard": false
+  },
+  {
+    "viewport": "mobile375",
+    "scenario": "B-hazards-apartment-kids-glue",
+    "errors": [],
+    "pdf": "ok MiceGoneGuide-Mouse-Control-Plan.pdf",
+    "h1": [
+      "Your mouse control plan"
+    ],
+    "status": "Reported conditions need qualified attention",
+    "startHere": [
+      "Keep clear of damaged wiring",
+      "Leave duct contamination to professionals",
+      "Stop using glue traps"
+    ],
+    "actions": [
+      "Keep clear of damaged wiring",
+      "Leave duct contamination to professionals",
+      "Stop using glue traps",
+      "Keep rodenticide in locked, tamper-resistant stations",
+      "Record what you found and where",
+      "Move chewable packaging into hard containers",
+      "Gather your cleanup and trapping supplies",
+      "Cleanup guide",
+      "Set snap traps where you found signs",
+      "Trap placement guide",
+      "Check traps every day",
+      "Trap placement guide",
+      "Clean up safely. Never sweep or vacuum waste",
+      "Cleanup guide",
+      "Inspect for gaps a pencil could fit through",
+      "Entry-gap checklist",
+      "Seal what you find with materials mice can't chew",
+      "Entry-gap checklist",
+      "Tell your landlord or building manager",
+      "Keep trapping until catches and new signs stop",
+      "Re-inspect your earlier repairs",
+      "Reduce outdoor food and shelter",
+      "Re-check your seals before autumn",
+      "Decide in advance when to call a professional"
+    ],
+    "overflow": false,
+    "robots": "noindex, follow",
+    "proCta": [
+      "Pro Masterplan",
+      "See what's inside · $9.99",
+      "Pro Masterplan"
+    ],
+    "rooms": "Kitchen\n\nLook behind the stove and refrigerator, in the backs of cabinets and drawers, and around sink plumbing. Protect food and food-contact surfaces. Only move appliances you can disconnect and move safely.\n\nAttic\n\nInspect only from safe, accessible spots and don't step on unsupported ceilings. Leave contaminated insulation alone until you have read the CDC cleanup steps for insulation.\n\nPro adds a full protocol for each room: what to inspect, where to trap, what to store and what to watch for.",
+    "help": "Keep clear of damaged wiring\n\nDon't touch or move it. Arrange an assessment by a qualified electrician. Smoke, sparks or a burning smell need an emergency response. UC IPM notes that mice gnaw wires and that rodent gnawing is suspected in many fires of unknown origin.\n\nLeave duct contamination to professionals\n\nDon't clean the heating or cooling system yourself. The CDC advises contacting a professional rodent-control service when there is evidence that rodents have accessed ventilation systems; duct-cleaning companies know the risks.\nGood reasons to call a professional\nYou reported damaged wiring, duct contamination or heavy contamination. Ask a qualified professional before you proceed.\nSigns keep appearing after a week or more of consistent trapping, safe cleanup and sealing.\nEvidence is in places you can't safely reach, such as inside walls, ducts, a crawl space or a roof void.\nYou develop symptoms after possible rodent exposure. Talk to a healthcare provider and mention the exposure, as the CDC advises.\nFrom the CDC\nEvidence that rodents have been in heating or cooling ducts: contact a professional rodent-control service. Duct-cleaning companies know the risks.\nHeavy infestations, vacant buildings with large numbers of rodents, or confirmed rodent-borne disease in the local rodent population: special precautions apply. Contact your local health department with questions about your situation.\nIllness you think may be linked to rodents: talk to a healthcare provider and tell them about any exposure.",
+    "textLength": 9350,
+    "hasPoisonWarning": true,
+    "hasGlueStop": true,
+    "hasHazard": true
+  },
+  {
+    "viewport": "mobile375",
+    "scenario": "C-noises-only-walls-pets-ultrasonic",
+    "errors": [],
+    "pdf": "ok MiceGoneGuide-Mouse-Control-Plan.pdf",
+    "h1": [
+      "Your mouse control plan"
+    ],
+    "status": "Activity not confirmed by physical evidence",
+    "startHere": [
+      "Close off open food and pet bowls now",
+      "Look for physical evidence before you act",
+      "Gather your cleanup and trapping supplies"
+    ],
+    "actions": [
+      "Look for physical evidence before you act",
+      "Close off open food and pet bowls now",
+      "Gather your cleanup and trapping supplies",
+      "Cleanup guide",
+      "Don't rely on repellents or ultrasonic devices",
+      "Clean up safely. Never sweep or vacuum waste",
+      "Cleanup guide",
+      "Inspect for gaps a pencil could fit through",
+      "Entry-gap checklist",
+      "Seal what you find with materials mice can't chew",
+      "Entry-gap checklist",
+      "Check skirting and the base of the home",
+      "Keep trapping until catches and new signs stop",
+      "Re-inspect for missed gaps",
+      "Reduce outdoor food and shelter",
+      "Re-check your seals before autumn",
+      "Decide in advance when to call a professional"
+    ],
+    "overflow": false,
+    "robots": "noindex, follow",
+    "proCta": [
+      "Pro Masterplan",
+      "See what's inside · $9.99",
+      "Pro Masterplan"
+    ],
+    "rooms": "Near or inside walls\n\nInspect the accessible edges on both sides of the wall. Sounds can't pinpoint a nest, so don't cut into drywall or put loose poison into a wall void.\n\nBedroom\n\nInspect accessible edges, closets and under furniture. Remove food, and keep traps and bait where children and pets can't reach.\n\nPro adds a full protocol for each room: what to inspect, where to trap, what to store and what to watch for.",
+    "help": "Good reasons to call a professional\nSigns keep appearing after a week or more of consistent trapping, safe cleanup and sealing.\nEvidence is in places you can't safely reach, such as inside walls, ducts, a crawl space or a roof void.\nYou develop symptoms after possible rodent exposure. Talk to a healthcare provider and mention the exposure, as the CDC advises.\nFrom the CDC\nEvidence that rodents have been in heating or cooling ducts: contact a professional rodent-control service. Duct-cleaning companies know the risks.\nHeavy infestations, vacant buildings with large numbers of rodents, or confirmed rodent-borne disease in the local rodent population: special precautions apply. Contact your local health department with questions about your situation.\nIllness you think may be linked to rodents: talk to a healthcare provider and tell them about any exposure.",
+    "textLength": 7878,
+    "hasPoisonWarning": false,
+    "hasGlueStop": false,
+    "hasHazard": false
+  }
+]

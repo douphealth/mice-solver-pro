@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { reloadOnce } from "./lib/lazy";
+import { startAnalytics } from "./lib/analytics";
 
 // The git-connected Pages preview (*.pages.dev) has no API, so purchases can't be verified there. Send visitors to the real app.
 if (/\.pages\.dev$/i.test(window.location.hostname)) {
@@ -10,5 +11,7 @@ if (/\.pages\.dev$/i.test(window.location.hostname)) {
 
 // Vite fires this when a preloaded chunk or stylesheet is missing (e.g. a tab opened before the latest deploy).
 window.addEventListener("vite:preloadError", () => { reloadOnce(); });
+
+startAnalytics(window.location.hostname);
 
 createRoot(document.getElementById("root")!).render(<App />);

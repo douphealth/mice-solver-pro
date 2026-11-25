@@ -82,6 +82,37 @@ test.describe("free planner", () => {
     expect(errors).toEqual([]);
   });
 
+  test("after the plan: free-vs-Pro next step, poison emergency help and anonymous funnel counts", async ({ page }) => {
+    const errors = watchErrors(page);
+    const events: any[] = [];
+    // sendBeacon bodies aren't exposed to request listeners, so read them at the route and pass them on to the worker.
+    await page.route("**/api/event", async route => {
+      try { events.push(JSON.parse(route.request().postDataBuffer()?.toString("utf8") || "{}")); } catch { /* ignore */ }
+      await route.continue();
+    });
+    await completeQuiz(page);
+    const next = page.getByTestId("plan-next-step");
+    await expect(next).toBeVisible();
+    await expect(next.getByRole("rowheader", { name: "Evidence log with weekly chart and CSV export" })).toBeVisible();
+    await page.getByRole("tab", { name: "When to call a pro" }).click();
+    await expect(page.getByTestId("poison-emergency")).toContainText("1-800-222-1222");
+    await next.getByRole("link", { name: /See the Pro Masterplan/ }).click();
+    await expect(page).toHaveURL(/\/pro$/);
+    await expect.poll(() => events.map(e => e.event)).toEqual(expect.arrayContaining(["planner_start", "planner_complete", "report_viewed", "pro_cta_clicked"]));
+    expect(JSON.stringify(events)).not.toMatch(/droppings|kitchen|@|cs_/);
+    await noOverflow(page);
+    expect(errors).toEqual([]);
+  });
+
+  test("crawlers get each route's own title and canonical without running JavaScript", async ({ request }) => {
+    const html = await (await request.get("/tools/entry-points")).text();
+    expect(html).toContain("<title>Mouse Entry-Gap Inspection Checklist | MiceGoneGuide</title>");
+    expect(html).toContain('<link rel="canonical" href="https://elimination.micegoneguide.com/tools/entry-points"');
+    const plan = await (await request.get("/plan")).text();
+    expect(plan).toContain('<meta name="robots" content="noindex, follow"');
+    expect((await request.post("/api/event", { data: { event: "planner_start" } })).status()).toBe(204);
+  });
+
   test("the legacy /report URL and unknown pages behave", async ({ page, request }) => {
     await page.goto("/report");
     await expect(page).toHaveURL(/\/quiz$/);

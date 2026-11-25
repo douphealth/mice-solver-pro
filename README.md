@@ -4,7 +4,7 @@ Live at <https://elimination.micegoneguide.com>. A free, source-backed mouse con
 
 - **Free:** seven-question quiz → personalised plan (today / this week / ongoing), four interactive tools, PDF, calendar reminders. No account, no email.
 - **Pro ($9.99, Stripe Payment Link):** dated 30-day schedule, full room protocols, trap layout helper, evidence log with chart/CSV, sealing materials guide, supply list, pro-call kit, prevention calendar, print-ready PDF workbook.
-- **Honesty rules** (enforced by tests and `npm run guardrails`): no diagnosis, no species ID, no mouse counts, no scores, no invented statistics or reviews, no guaranteed results. Every recommendation cites the CDC rodent-control pages or UC IPM house-mouse notes (reviewed 2 October 2026).
+- **Honesty rules** (enforced by tests and `npm run guardrails`): no diagnosis, no species ID, no mouse counts, no scores, no invented statistics or reviews, no guaranteed results. Every recommendation cites the CDC rodent-control pages, UC IPM house-mouse notes (reviewed 2 October 2026) or the EPA rodenticide safety pages (reviewed 25 November 2026). Homes with children or pets get poison-safety steps with the US Poison Help line (1-800-222-1222) and the ASPCA Animal Poison Control Center number.
 
 ## Architecture
 
@@ -20,10 +20,21 @@ One Worker (`micegoneguide-elimination-selfhosted-proxy`, route `elimination.mic
 | `GET /api/entitlement?session_id=` | Is this Checkout Session a paid, unrefunded purchase of the Pro product? |
 | `GET /api/pro-pack?session_id=` | Returns the Pro content **only** if the above is true (`402` otherwise). The Pro content lives in `worker/pro-content.ts` and is not in the public JS bundle. |
 | `POST /api/access-email` | Called by `/payment-success` once Stripe confirms the purchase: emails the access link to the address on the Stripe session, once per purchase (shared marker with the webhook). Works without the webhook. |
-| `POST /api/restore` | Emails an access link to the address used at checkout (same response whether or not a purchase exists). |
+| `POST /api/restore` | Emails an access link to the address used at checkout for the newest purchase that still grants access (refunded ones are skipped). Same response whether or not a purchase exists. |
 | `POST /api/lead` | Optional email check-ins (Brevo list + welcome email). Consent required, honeypot, rate limited. |
 | `POST /api/stripe-webhook` | Signed Stripe webhook; emails the access link after a paid checkout. Optional hardening: access never depends on it. |
 | `GET /api/health` | Configuration status (booleans only). |
+| `POST /api/event` | Anonymous funnel counts (allowlisted event name + app path + country; no IP, id, cookie or answers). Skipped when the browser sends Do Not Track / Global Privacy Control. Written to the Analytics Engine dataset `mgg_planner_events` (binding `EVENTS`) and to Workers Logs. Always answers 204. |
+
+HTML responses get each route's own `<title>`, description, canonical and robots tags from `src/lib/site.ts` (`routeHead` in `worker/index.ts`), so crawlers that don't run JavaScript no longer see the home page's tags on every route.
+
+Funnel query (Cloudflare → Analytics Engine SQL API):
+
+```sql
+SELECT blob1 AS event, blob2 AS path, SUM(_sample_interval) AS n
+FROM mgg_planner_events WHERE timestamp > NOW() - INTERVAL '28' DAY
+GROUP BY event, path ORDER BY n DESC
+```
 
 ### How a purchase works
 

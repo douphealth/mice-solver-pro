@@ -15,6 +15,8 @@ export interface Env {
   STRIPE_API_BASE?: string;
   BREVO_API_BASE?: string;
   DISABLE_RATE_LIMIT?: string;
+  /** Optional Workers Analytics Engine dataset for anonymous funnel counts (see README). Without it, events go to Workers Logs only. */
+  EVENTS?: { writeDataPoint(point: { blobs?: string[]; doubles?: number[]; indexes?: string[] }): void };
 
   // --- secrets (wrangler secret put) ---
   /** Restricted key, read-only: Checkout Sessions (and optionally PaymentIntents/Charges for refund detection). */

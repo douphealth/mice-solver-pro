@@ -94,7 +94,7 @@ export const PRO_PACK: ProPack = {
       day: 21, title: "Three-week review", focus: "Test whether activity has really stopped.",
       tasks: [
         { id: "d21-log", text: "Check the log: no catches and no new signs for a full week is the CDC's check-in point for ending trapping. It isn't a guarantee.", source: "cdc-trap" },
-        { id: "d21-continue", text: "If signs persist, keep trapping and consider professional help. The CDC says that if trapping does not solve the problem you can consider a poison bait station or seek professional help.", source: "cdc-trap" },
+        { id: "d21-continue", text: "If signs persist, keep trapping and consider professional help. The CDC says that if trapping does not solve the problem you can consider a poison bait station or seek professional help. If you use bait, the EPA says to use only tamper-resistant bait stations placed where children and pets can't reach them; if anyone may have swallowed bait, call Poison Help at 1-800-222-1222 (US).", source: "cdc-trap" },
       ],
     },
     {

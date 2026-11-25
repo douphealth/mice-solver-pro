@@ -2,6 +2,8 @@ import { PRO_PACK } from "./pro-content";
 import { accessEmail, brevo, firstName, sendMail, welcomeEmail } from "./mail";
 import { SESSION_ID_RE, checkEntitlement, findPaidSessionByEmail, evaluateSession, stripeReady, verifyStripeSignature } from "./stripe";
 import type { Env } from "./types";
+import { EVENT_NAMES, EVENT_PATH_RE } from "../src/lib/events";
+import { SEO } from "../src/lib/site";
 
 const APP_ROUTES = new Set([
   "/", "/quiz", "/plan", "/report", "/pro", "/payment-success", "/restore", "/privacy", "/terms",
@@ -189,6 +191,28 @@ async function handleAccessEmail(request: Request, env: Env, url: URL): Promise<
   return json(env, 200, { ok: outcome === "sent" || outcome === "already", sent: outcome === "sent" || outcome === "already", outcome, email: entitlement.email });
 }
 
+const EVENT_SET = new Set<string>(EVENT_NAMES);
+
+/**
+ * Anonymous funnel counts from the app (planner started/completed, Pro button clicked, checkout opened, ...).
+ * Stores only the event name, an allowlisted app path and the visitor's country as reported by Cloudflare.
+ * No IP address, id, cookie or answer is stored. Always answers 204 so the beacon never retries or surfaces errors.
+ */
+async function handleEvent(request: Request, env: Env, url: URL): Promise<Response> {
+  const done = new Response(null, { status: 204, headers: { ...baseHeaders(env), "cache-control": "no-store" } });
+  if (request.method !== "POST" || !originAllowed(request, env, url)) return done;
+  const body = await readJson(request, 512);
+  if (!body.ok) return done;
+  const event = String(body.value.event || "");
+  if (!EVENT_SET.has(event)) return done;
+  const path = typeof body.value.path === "string" && EVENT_PATH_RE.test(body.value.path) ? body.value.path : "";
+  if (!(await allow(env, `event:${clientIp(request)}`, 120, 3600))) return done;
+  const country = String((request as any).cf?.country || "").slice(0, 2);
+  try { env.EVENTS?.writeDataPoint({ blobs: [event, path, country], doubles: [1], indexes: [event] }); } catch { /* counting must never fail a request */ }
+  console.log(JSON.stringify({ mgg_event: event, path, country }));
+  return done;
+}
+
 async function handleWebhook(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") return json(env, 405, { ok: false });
   if (!env.STRIPE_WEBHOOK_SECRET) return json(env, 503, { ok: false, message: "Webhook is not configured." });
@@ -237,6 +261,7 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
   if (path === "/api/access-email") return handleAccessEmail(request, env, url);
   if (path === "/api/stripe-webhook") return handleWebhook(request, env);
   if (path === "/api/health") return handleHealth(env);
+  if (path === "/api/event") return handleEvent(request, env, url);
   return json(env, 404, { ok: false, message: "Unknown API route." });
 }
 
@@ -245,6 +270,14 @@ async function handleApi(request: Request, env: Env, url: URL): Promise<Response
 function isAssetPath(pathname: string): boolean {
   const last = pathname.split("/").pop() || "";
   return last.includes(".");
+}
+
+/** HTML is rewritten per route, so never let the asset layer answer 304 for a shell another route may have cached. */
+function stripConditional(h: Headers): Headers {
+  const out = new Headers(h);
+  out.delete("if-none-match");
+  out.delete("if-modified-since");
+  return out;
 }
 
 function decorate(env: Env, res: Response, pathname: string, isHtml: boolean, status?: number): Response {
@@ -271,19 +304,54 @@ function decorate(env: Env, res: Response, pathname: string, isHtml: boolean, st
   return new Response(res.body, { status: status ?? res.status, statusText: res.statusText, headers });
 }
 
+const escapeAttr = (v: string) => v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * The app shell ships the home page's title, description and canonical. Crawlers that don't run JavaScript would
+ * read those on every route, so rewrite the head per route before serving (the client keeps them in step afterwards).
+ */
+export function routeHead(html: string, origin: string, route: string, notFound: boolean): string {
+  const known = notFound ? undefined : SEO[route];
+  const title = escapeAttr(`${known?.title ?? "Page not found"} | MiceGoneGuide`);
+  const description = escapeAttr(known?.description ?? "This page doesn't exist. Build a free mouse control plan instead.");
+  const robots = known?.index ? "index, follow" : notFound ? "noindex" : "noindex, follow";
+  const canonical = escapeAttr(`${origin}${route === "/" ? "/" : route}`);
+  const setMeta = (doc: string, attr: "name" | "property", key: string, value: string) =>
+    doc.replace(new RegExp(`(<meta ${attr}="${key}" content=")[^"]*(")`), `$1${value}$2`);
+  let out = html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`);
+  out = setMeta(out, "name", "description", description);
+  out = setMeta(out, "name", "robots", robots);
+  out = out.replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${canonical}$2`);
+  out = setMeta(out, "property", "og:url", canonical);
+  out = setMeta(out, "property", "og:title", title);
+  out = setMeta(out, "property", "og:description", description);
+  out = setMeta(out, "name", "twitter:title", title);
+  out = setMeta(out, "name", "twitter:description", description);
+  return out;
+}
+
+async function withRouteHead(res: Response, env: Env, route: string, notFound: boolean): Promise<Response> {
+  if (!(res.headers.get("content-type") || "").includes("text/html") || !res.ok) return res;
+  const html = routeHead(await res.text(), env.PUBLIC_ORIGIN, route, notFound);
+  const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  headers.delete("etag");
+  return new Response(html, { status: res.status, statusText: res.statusText, headers });
+}
+
 async function serveStatic(request: Request, env: Env, url: URL): Promise<Response> {
   const route = url.pathname.replace(/\/+$/, "") || "/";
   if (REDIRECTS[route]) return new Response(null, { status: 301, headers: { location: REDIRECTS[route], ...baseHeaders(env) } });
   const known = APP_ROUTES.has(route);
   if (!known && !isAssetPath(url.pathname)) {
     // Unknown navigation: serve the app shell so the client can show its not-found page, but with a real 404 status.
-    const shell = await env.ASSETS.fetch(new Request(new URL("/", url), { headers: request.headers }));
-    return decorate(env, shell, url.pathname, true, 404);
+    const shell = await env.ASSETS.fetch(new Request(new URL("/", url), { headers: stripConditional(request.headers) }));
+    return decorate(env, await withRouteHead(shell, env, route, true), url.pathname, true, 404);
   }
-  let res = await env.ASSETS.fetch(request);
-  if (res.status === 404 && known) res = await env.ASSETS.fetch(new Request(new URL("/", url), { headers: request.headers }));
+  let res = await env.ASSETS.fetch(known ? new Request(request.url, { method: request.method, headers: stripConditional(request.headers) }) : request);
+  if (res.status === 404 && known) res = await env.ASSETS.fetch(new Request(new URL("/", url), { headers: stripConditional(request.headers) }));
   const isHtml = (res.headers.get("content-type") || "").includes("text/html");
-  return decorate(env, res, url.pathname, isHtml);
+  return decorate(env, isHtml && known ? await withRouteHead(res, env, route, false) : res, url.pathname, isHtml);
 }
 
 export default {
